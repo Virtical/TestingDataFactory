@@ -1,0 +1,47 @@
+# Общие правила для всего репозитория.
+# Специфичные правила лежат в frontend/.gitignore и backend/.gitignore.
+
+# IDE и редакторы
+.idea/**
+!.idea/**/
+# Прикреплённые к решению папки (frontend) — общие для всех.
+!.idea/.idea.TestingDataFactory/.idea/indexLayout.xml
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.user
+*.userprefs
+*.sw?
+*~
+
+# Файлы ОС
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Переменные окружения и секреты
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+*.key
+secrets.json
+
+# Логи и временные файлы
+logs/
+*.log
+*.tmp
+*.temp
+
+# Зависимости и артефакты сборки
+node_modules/
+dist/
+[Bb]in/
+[Oo]bj/
+coverage/
+TestResults/
