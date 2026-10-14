@@ -8,7 +8,10 @@ export default defineConfig({
     // Явно IPv4: по умолчанию Vite слушает только [::1], а он доступен не на всех машинах.
     host: '127.0.0.1',
     proxy: {
-      '/api': 'http://127.0.0.1:5141',
+      '/api': {
+        target: 'http://127.0.0.1:5141',
+        changeOrigin: true,
+      },
     },
   },
 })

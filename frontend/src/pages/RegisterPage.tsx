@@ -1,10 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { useAuth } from '../context/AuthContext';
+import { register, type ApiError } from '../api/auth';
 import './RegisterPage.css';
 
 export function RegisterPage() {
     const navigate = useNavigate();
+    const { setUser } = useAuth();
 
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -12,21 +15,41 @@ export function RegisterPage() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: SubmitEvent) => {
         e.preventDefault();
         setError(null);
+        setFieldErrors({});
 
         if (password !== confirmPassword) {
-            setError('Пароли не совпадают');
+            setFieldErrors({ confirmPassword: 'Пароли не совпадают' });
             return;
         }
-        if (password.length < 8) {
-            setError('Пароль должен быть не короче 8 символов');
-            return;
+
+        try {
+            const { user } = await register({
+                firstName,
+                lastName,
+                email,
+                password,
+            });
+
+            setUser(user);
+            navigate('/dashboard', { replace: true });
+        } catch (err) {
+            const apiErr = err as ApiError;
+
+            if (apiErr.code === 'VALIDATION_ERROR' && apiErr.fields) {
+                setFieldErrors(apiErr.fields);
+            } else if (apiErr.code === 'EMAIL_TAKEN') {
+                setFieldErrors({ email: 'Пользователь с такой почтой уже есть' });
+            } else if (apiErr.code === 'NETWORK_ERROR') {
+                setError('Сервер недоступен, попробуйте позже');
+            } else {
+                setError(apiErr.message ?? 'Что-то пошло не так');
+            }
         }
-        
-        navigate('/welcome');
     };
 
     return (
@@ -49,7 +72,7 @@ export function RegisterPage() {
                         Заполните данные, чтобы создать аккаунт
                     </p>
 
-                    <form className="register-form" onSubmit={handleSubmit}>
+                    <form className="register-form" onSubmit={handleSubmit} noValidate>
                         <div className="register-form__row">
                             <div className="form-field">
                                 <label className="form-field__label" htmlFor="firstName">
@@ -64,6 +87,9 @@ export function RegisterPage() {
                                     onChange={(e) => setFirstName(e.target.value)}
                                     required
                                 />
+                                {fieldErrors.firstName && (
+                                    <span className="form-field__error">{fieldErrors.firstName}</span>
+                                )}
                             </div>
 
                             <div className="form-field">
@@ -79,6 +105,9 @@ export function RegisterPage() {
                                     onChange={(e) => setLastName(e.target.value)}
                                     required
                                 />
+                                {fieldErrors.lastName && (
+                                    <span className="form-field__error">{fieldErrors.lastName}</span>
+                                )}
                             </div>
                         </div>
 
@@ -95,6 +124,9 @@ export function RegisterPage() {
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
+                            {fieldErrors.email && (
+                                <span className="form-field__error">{fieldErrors.email}</span>
+                            )}
                         </div>
 
                         <div className="form-field">
@@ -113,6 +145,9 @@ export function RegisterPage() {
                             <span className="form-field__hint">
                 Минимум 8 символов, буквы и цифры
               </span>
+                            {fieldErrors.password && (
+                                <span className="form-field__error">{fieldErrors.password}</span>
+                            )}
                         </div>
 
                         <div className="form-field">
@@ -128,6 +163,11 @@ export function RegisterPage() {
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 required
                             />
+                            {fieldErrors.confirmPassword && (
+                                <span className="form-field__error">
+                  {fieldErrors.confirmPassword}
+                </span>
+                            )}
                         </div>
 
                         {error && <p className="register-form__error">{error}</p>}

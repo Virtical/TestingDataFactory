@@ -1,25 +1,41 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { useAuth } from '../context/AuthContext';
+import { login, type ApiError } from '../api/auth';
 import './LoginPage.css';
 
 export function LoginPage() {
     const navigate = useNavigate();
 
+    const { setUser } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: SubmitEvent) => {
         e.preventDefault();
         setError(null);
+        setFieldErrors({});
 
-        if (!email || !password) {
-            setError('Заполните все поля');
-            return;
+        try {
+            const { user } = await login({ email, password });
+
+            setUser(user);
+            navigate('/dashboard', { replace: true });
+        } catch (err) {
+            const apiErr = err as ApiError;
+            if (apiErr.code === 'VALIDATION_ERROR' && apiErr.fields) {
+                setFieldErrors(apiErr.fields);
+            } else if (apiErr.code === 'INVALID_CREDENTIALS') {
+                setError('Неверная почта или пароль');
+            } else if (apiErr.code === 'NETWORK_ERROR') {
+                setError('Сервер недоступен, попробуйте позже');
+            } else {
+                setError(apiErr.message ?? 'Что-то пошло не так');
+            }
         }
-        
-        navigate('/welcome');
     };
 
     return (
@@ -42,7 +58,7 @@ export function LoginPage() {
                         Войдите, чтобы продолжить работу с платформой
                     </p>
 
-                    <form className="login-form" onSubmit={handleSubmit}>
+                    <form className="login-form" onSubmit={handleSubmit} noValidate>
                         <div className="form-field">
                             <label className="form-field__label" htmlFor="email">
                                 Электронная почта
@@ -56,6 +72,9 @@ export function LoginPage() {
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
+                            {fieldErrors.email && (
+                                <span className="form-field__error">{fieldErrors.email}</span>
+                            )}
                         </div>
 
                         <div className="form-field">
@@ -71,6 +90,9 @@ export function LoginPage() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                             />
+                            {fieldErrors.password && (
+                                <span className="form-field__error">{fieldErrors.password}</span>
+                            )}
                         </div>
 
                         {error && <p className="login-form__error">{error}</p>}
