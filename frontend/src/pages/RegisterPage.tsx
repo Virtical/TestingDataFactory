@@ -16,9 +16,11 @@ export function RegisterPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: SubmitEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
         setError(null);
         setFieldErrors({});
 
@@ -27,6 +29,8 @@ export function RegisterPage() {
             return;
         }
 
+        setIsSubmitting(true);
+        
         try {
             const { user } = await register({
                 firstName,
@@ -49,6 +53,8 @@ export function RegisterPage() {
             } else {
                 setError(apiErr.message ?? 'Что-то пошло не так');
             }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -85,6 +91,7 @@ export function RegisterPage() {
                                     placeholder="Иван"
                                     value={firstName}
                                     onChange={(e) => setFirstName(e.target.value)}
+                                    disabled={isSubmitting}
                                     required
                                 />
                                 {fieldErrors.firstName && (
@@ -103,6 +110,7 @@ export function RegisterPage() {
                                     placeholder="Иванов"
                                     value={lastName}
                                     onChange={(e) => setLastName(e.target.value)}
+                                    disabled={isSubmitting}
                                     required
                                 />
                                 {fieldErrors.lastName && (
@@ -122,6 +130,7 @@ export function RegisterPage() {
                                 placeholder="example@gmail.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                disabled={isSubmitting}
                                 required
                             />
                             {fieldErrors.email && (
@@ -140,6 +149,7 @@ export function RegisterPage() {
                                 placeholder="Введите пароль"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                disabled={isSubmitting}
                                 required
                             />
                             <span className="form-field__hint">
@@ -161,6 +171,7 @@ export function RegisterPage() {
                                 placeholder="Повторите пароль"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
+                                disabled={isSubmitting}
                                 required
                             />
                             {fieldErrors.confirmPassword && (
@@ -172,8 +183,8 @@ export function RegisterPage() {
 
                         {error && <p className="register-form__error">{error}</p>}
 
-                        <button type="submit" className="btn btn--primary register-form__submit">
-                            Зарегистрироваться
+                        <button type="submit" className="btn btn--primary register-form__submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Регистрируем…' : 'Зарегистрироваться'}
                         </button>
                     </form>
                 </div>

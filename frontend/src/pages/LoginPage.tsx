@@ -13,11 +13,14 @@ export function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: SubmitEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
         setError(null);
         setFieldErrors({});
+        setIsSubmitting(true);
 
         try {
             const { user } = await login({ email, password });
@@ -35,6 +38,8 @@ export function LoginPage() {
             } else {
                 setError(apiErr.message ?? 'Что-то пошло не так');
             }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -70,6 +75,7 @@ export function LoginPage() {
                                 placeholder="example@gmail.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                disabled={isSubmitting}
                                 required
                             />
                             {fieldErrors.email && (
@@ -88,6 +94,7 @@ export function LoginPage() {
                                 placeholder="Введите пароль"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                disabled={isSubmitting}
                                 required
                             />
                             {fieldErrors.password && (
@@ -97,8 +104,8 @@ export function LoginPage() {
 
                         {error && <p className="login-form__error">{error}</p>}
 
-                        <button type="submit" className="btn btn--primary login-form__submit">
-                            Войти
+                        <button type="submit" className="btn btn--primary login-form__submit" disabled={isSubmitting}>
+                            {isSubmitting ? 'Входим…' : 'Войти'}
                         </button>
                     </form>
                 </div>
