@@ -45,3 +45,6 @@ dist/
 [Oo]bj/
 coverage/
 TestResults/
+
+# Claude Code
+/CLAUDE.md
