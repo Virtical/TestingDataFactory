@@ -26,3 +26,12 @@ Content-Type: application/json
 }
 
 ###
+
+GET {{TestingDataFactory.Api_HostAddress}}/api/auth/me
+Accept: application/json
+
+###
+
+POST {{TestingDataFactory.Api_HostAddress}}/api/auth/logout
+
+###
