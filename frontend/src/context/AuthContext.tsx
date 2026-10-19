@@ -1,31 +1,47 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { User } from '../api/auth';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { type User, me, logout as apiLogout } from '../api/auth';
+
+type AuthStatus = 'loading' | 'authenticated' | 'guest';
 
 type AuthContextValue = {
     user: User | null;
+    status: AuthStatus;
     isAuthenticated: boolean;
     setUser: (user: User | null) => void;
-    logout: () => void;
+    logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const USER_KEY = 'auth_user';
-
-function readStoredUser(): User | null {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUserState] = useState<User | null>(readStoredUser);
+    const [user, setUserState] = useState<User | null>(null);
+    const [status, setStatus] = useState<AuthStatus>('loading');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    useEffect(() => {
+        me()
+            .then((data) => {
+                setUserState(data.user);
+                setStatus('authenticated');
+            })
+            .catch(() => {
+                setStatus('guest');
+            });
+    }, []);
 
     const setUser = (next: User | null) => {
         setUserState(next);
-        if (next) {
-            localStorage.setItem(USER_KEY, JSON.stringify(next));
-        } else {
-            localStorage.removeItem(USER_KEY);
+        setStatus(next ? 'authenticated' : 'guest');
+    };
+
+    const logout = async () => {
+        setIsAuthenticated(true);
+        try {
+            await apiLogout();
+        } catch {
+        } finally {
+            setUser(null);
+            setIsAuthenticated(false);
         }
     };
 
@@ -33,9 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <AuthContext.Provider
             value={{
                 user,
-                isAuthenticated: Boolean(user),
+                status,
+                isAuthenticated,
                 setUser,
-                logout: () => setUser(null),
+                logout
             }}
         >
             {children}

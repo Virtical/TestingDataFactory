@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
+import { ProtectedRoute, GuestRoute, RootRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { HomePage } from './pages/HomePage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -12,7 +12,9 @@ function App() {
         <AuthProvider>
             <BrowserRouter>
                 <Routes>
-                    <Route path="/" element={<LandingPage />} />
+                    <Route element={<RootRoute />}>
+                        <Route path="/" element={<LandingPage />} />
+                    </Route>
                     <Route element={<ProtectedRoute />}>
                         <Route path="/dashboard" element={<HomePage />} />
                     </Route>

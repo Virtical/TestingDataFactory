@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, ArrowBarRight } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
 import './Sidebar.css';
+import { flushSync } from 'react-dom';
 
 export function Sidebar() {
     const { user, logout } = useAuth();
@@ -10,8 +11,10 @@ export function Sidebar() {
     const displayName = user ? `${user.firstName} ${user.lastName}` : 'Пользователь';
 
     const handleLogout = () => {
-        logout();
-        navigate('/', { replace: true });
+        flushSync(() => {
+            navigate('/', { replace: true });
+        });
+        void logout();
     };
 
     return (
