@@ -1,22 +1,46 @@
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TestingDataFactory.Api;
+using TestingDataFactory.Api.Controllers;
+using TestingDataFactory.Api.Errors;
+using TestingDataFactory.Api.Validation;
 using TestingDataFactory.Data;
 using TestingDataFactory.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Ошибки валидации отдаём сами в формате { error: ... }, а не стандартным ProblemDetails.
-builder.Services.AddControllers()
-    .ConfigureApiBehaviorOptions(options => options.SuppressModelStateInvalidFilter = true);
+// Ошибки отдаём сами в формате { error: ... }, а не стандартным ProblemDetails:
+// тело запроса проверяет ValidationFilter с помощью валидаторов FluentValidation,
+// а исключения (ошибки валидации, ApiException и все остальные) превращает в ответ ApiExceptionHandler.
+builder.Services.AddControllers(options => options.Filters.Add<ValidationFilter>())
+    .ConfigureApiBehaviorOptions(options => options.SuppressModelStateInvalidFilter = true)
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+
 builder.Services.AddOpenApi();
+
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+// Правила поля выполняются до первой ошибки: на поле одно сообщение, и правила после NotEmpty не получают null.
+ValidatorOptions.Global.DefaultRuleLevelCascadeMode = CascadeMode.Stop;
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<UserService>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -31,9 +55,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
         // По умолчанию cookie-авторизация перенаправляет на страницу входа. API вместо этого отвечает 401/403.
         options.Events.OnRedirectToLogin = context => WriteError(
-            context.HttpContext, StatusCodes.Status401Unauthorized, "UNAUTHORIZED", "Требуется вход в систему");
+            context.HttpContext, StatusCodes.Status401Unauthorized, ErrorCode.Unauthorized, "Требуется вход в систему");
         options.Events.OnRedirectToAccessDenied = context => WriteError(
-            context.HttpContext, StatusCodes.Status403Forbidden, "FORBIDDEN", "Недостаточно прав");
+            context.HttpContext, StatusCodes.Status403Forbidden, ErrorCode.Forbidden, "Недостаточно прав");
     });
 builder.Services.AddAuthorization();
 
@@ -45,11 +69,16 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
 
     options.OnRejected = (context, _) => new ValueTask(WriteError(
-        context.HttpContext, StatusCodes.Status429TooManyRequests, "TOO_MANY_REQUESTS",
+        context.HttpContext, StatusCodes.Status429TooManyRequests, ErrorCode.TooManyRequests,
         "Слишком много попыток, подождите минуту"));
 });
 
 var app = builder.Build();
+
+// Первым в конвейере, чтобы ловить исключения из всех следующих middleware и контроллеров.
+// Ответ формирует ApiExceptionHandler; пустой запасной обработчик нужен только потому, что без него
+// (или без AddProblemDetails, который мы не используем) UseExceptionHandler падает при старте.
+app.UseExceptionHandler(_ => { });
 
 if (app.Environment.IsDevelopment())
 {
@@ -73,7 +102,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
 
-static Task WriteError(HttpContext context, int status, string code, string message)
+static Task WriteError(HttpContext context, int status, ErrorCode code, string message)
 {
     context.Response.StatusCode = status;
     return context.Response.WriteAsJsonAsync(ErrorResponse.Create(code, message));

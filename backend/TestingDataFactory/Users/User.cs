@@ -9,8 +9,10 @@ public class User
     public required string LastName { get; init; }
     
     public required string Email { get; init; }
-
-    public string PasswordHash { get; set; } = string.Empty;
+    
+    public string PasswordHash { get; private set; } = string.Empty;
 
     public DateTime CreatedAt { get; init; }
+
+    public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
 }
