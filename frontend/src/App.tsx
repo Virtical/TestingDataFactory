@@ -10,7 +10,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 function App() {
     return (
         <AuthProvider>
-            <BrowserRouter>
+            <BrowserRouter useTransitions={false}>
                 <Routes>
                     <Route element={<RootRoute />}>
                         <Route path="/" element={<LandingPage />} />
