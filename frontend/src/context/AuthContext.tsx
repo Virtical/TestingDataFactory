@@ -6,7 +6,6 @@ type AuthStatus = 'loading' | 'authenticated' | 'guest';
 type AuthContextValue = {
     user: User | null;
     status: AuthStatus;
-    isAuthenticated: boolean;
     setUser: (user: User | null) => void;
     logout: () => Promise<void>;
 };
@@ -16,7 +15,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUserState] = useState<User | null>(null);
     const [status, setStatus] = useState<AuthStatus>('loading');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
         me()
@@ -35,13 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = async () => {
-        setIsAuthenticated(true);
+        setUser(null);
         try {
             await apiLogout();
         } catch {
-        } finally {
-            setUser(null);
-            setIsAuthenticated(false);
         }
     };
 
@@ -50,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             value={{
                 user,
                 status,
-                isAuthenticated,
                 setUser,
                 logout
             }}
