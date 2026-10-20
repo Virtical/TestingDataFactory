@@ -32,15 +32,25 @@ const UNKNOWN_ERROR: ApiError = {
     message: 'Что-то пошло не так',
 };
 
-async function request<T>(url: string, body: unknown): Promise<T> {
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-    }).catch(() => {
+async function request<T>(url: string, options: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
+    const { method = 'GET', body } = options;
+
+    let res: Response;
+
+    try {
+        res = await fetch(url, {
+            method,
+            headers: body ? { 'Content-Type': 'application/json' } : undefined,
+            credentials: 'include',
+            body: body ? JSON.stringify(body) : undefined,
+        });
+    } catch {
         throw NETWORK_ERROR;
-    });
+    }
+    
+    if (res.status === 204) {
+        return undefined as T;
+    }
 
     const data = await res.json().catch(() => null);
 
@@ -52,9 +62,17 @@ async function request<T>(url: string, body: unknown): Promise<T> {
 }
 
 export function register(payload: RegisterPayload): Promise<{ user: User }> {
-    return request('/api/auth/register', payload);
+    return request('/api/auth/register', { method: 'POST', body: payload });
 }
 
 export function login(payload: LoginPayload): Promise<{ user: User }> {
-    return request('/api/auth/login', payload);
+    return request('/api/auth/login', { method: 'POST', body: payload });
+}
+
+export function me(): Promise<{ user: User }> {
+    return request('/api/auth/me', { method: 'GET' });
+}
+
+export function logout(): Promise<void> {
+    return request<void>('/api/auth/logout', { method: 'POST' });
 }

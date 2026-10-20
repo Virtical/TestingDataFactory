@@ -10,8 +10,8 @@ export function Sidebar() {
     const displayName = user ? `${user.firstName} ${user.lastName}` : 'Пользователь';
 
     const handleLogout = () => {
-        logout();
         navigate('/', { replace: true });
+        void logout();
     };
 
     return (
