@@ -1,24 +1,16 @@
-.layout {
-    display: flex;
-    min-height: 100vh;
-    background: var(--color-bg);
-}
-
-.layout__main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
 .topbar {
     background: var(--color-surface);
-    min-height: 78px;
+    min-height: 72px;
     padding: 16px 32px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    border-bottom: 2px solid var(--color-border);
+}
+
+.topbar__title {
+    font-size: 16px;
+    font-weight: 400;
 }
 
 .topbar__right {
@@ -27,34 +19,159 @@
     gap: 16px;
 }
 
-.topbar__icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    color: var(--color-text);
-    transition: background 0.15s;
-}
-
-.topbar__icon-btn:hover {
-    background: var(--color-surface-hover);
-}
-
 .topbar__avatar {
-    display: inline-flex;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--color-account);
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #d9d9d9;
-    color: #333;
-    cursor: pointer;
+    font-weight: 400;
+    font-size: 15px;
 }
 
-.layout__content {
+.layout__content--center {
+    display: flex;
+    justify-content: center;
+}
+
+.create-spec {
+    width: 100%;
+}
+
+.create-spec__title {
+    font-size: 32px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.create-spec__subtitle {
+    font-size: 16px;
+    color: var(--color-text-muted);
+    text-align: center;
+    margin-bottom: 40px;
+    line-height: 1.5;
+}
+
+.create-spec__input-block {
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.create-spec__input-block label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.create-spec__input-block textarea {
+    width: 100%;
+    border: 2px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    margin-bottom: 16px;
+}
+
+.create-spec__input-block textarea:focus {
+    border-color: var(--color-accent);
+}
+
+.create-spec__input-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.create-spec__draft-btn {
+    background-color: var(--color-accent);
+}
+
+.create-spec__draft-btn:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.create-spec__divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+}
+
+.create-spec__cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding-bottom: 40px;
+}
+
+.spec-card {
+    background: var(--color-surface);
+    border-left: 2px solid var(--color-border);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.spec-card__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    background: var(--color-background-icon);
+    color: var(--color-icon);
+}
+
+.spec-card__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.spec-card__desc {
+    font-size: 14px;
+    line-height: 1.5;
     flex: 1;
-    background: var(--color-bg);
+    margin-bottom: 16px;
+}
+
+.spec-card__btn {
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+}
+
+.spec-card__btn:hover {
+    color: var(--color-text);
+}
+
+.spec-card__formats {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-top: auto;
+}
+
+@media (max-width: 900px) {
+    .create-spec__cards,
+    .action-cards {
+        grid-template-columns: 1fr;
+    }
 }
