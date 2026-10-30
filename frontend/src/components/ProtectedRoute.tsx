@@ -2,11 +2,22 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export function ProtectedRoute() {
-    const { isAuthenticated } = useAuth();
-    return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+    const { status } = useAuth();
+    if (status === 'loading') return null;
+    if (status === 'guest') return <Navigate to="/login" replace />;
+    return <Outlet />;
 }
 
 export function GuestRoute() {
-    const { isAuthenticated } = useAuth();
-    return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Outlet />;
+    const { status } = useAuth();
+    if (status === 'loading') return null;
+    if (status === 'authenticated') return <Navigate to="/dashboard" replace />;
+    return <Outlet />;
+}
+
+export function RootRoute() {
+    const { status } = useAuth();
+    if (status === 'loading') return null;
+    if (status === 'authenticated') return <Navigate to="/dashboard" replace />;
+    return <Outlet />;
 }
