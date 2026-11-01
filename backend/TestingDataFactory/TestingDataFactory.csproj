@@ -11,4 +11,8 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\TestingDataFactory.Contracts\TestingDataFactory.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>

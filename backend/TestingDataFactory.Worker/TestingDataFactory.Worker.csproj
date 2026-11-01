@@ -13,6 +13,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\TestingDataFactory.Contracts\TestingDataFactory.Contracts.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
       <Content Include="..\..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/backend/">
+    <Project Path="backend/TestingDataFactory.Contracts/TestingDataFactory.Contracts.csproj" />
     <Project Path="backend/TestingDataFactory.Api/TestingDataFactory.Api.csproj" />
     <Project Path="backend/TestingDataFactory/TestingDataFactory.csproj" />
     <Project Path="backend\TestingDataFactory.CLI\TestingDataFactory.CLI.csproj" Type="Classic C#" />
