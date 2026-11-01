@@ -191,6 +191,44 @@ namespace TestingDataFactory.Data.Migrations
                     b.ToTable("OutboxState", "testing-data-factory");
                 });
 
+            modelBuilder.Entity("TestingDataFactory.Specifications.SpecificationJob", b =>
+                {
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SpecificationYaml")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("JobId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SpecificationJobs", "testing-data-factory");
+                });
+
             modelBuilder.Entity("TestingDataFactory.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -237,6 +275,15 @@ namespace TestingDataFactory.Data.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("TestingDataFactory.Specifications.SpecificationJob", b =>
+                {
+                    b.HasOne("TestingDataFactory.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

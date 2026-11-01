@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using TestingDataFactory.Data;
 using TestingDataFactory.Contracts;
 using TestingDataFactory.Users;
+using TestingDataFactory.Messaging;
+using TestingDataFactory.Specifications;
 
 namespace TestingDataFactory;
 
@@ -25,6 +27,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<UserService>();
+        services.AddScoped<SpecificationJobEventHandler>();
         
         // Инициализация выполняется до запуска hosted services шины и доставки outbox.
         services.AddHostedService<DataFactoryInitializationService>();
@@ -47,6 +50,8 @@ public static class ServiceCollectionExtensions
 
         services.AddMassTransit(bus =>
         {
+            bus.AddConsumer<SpecificationJobEventsConsumer>()
+                .Endpoint(endpoint => endpoint.Name = MessagingTopology.SpecificationJobEventsQueue);
             bus.AddEntityFrameworkOutbox<AppDbContext>(outbox =>
             {
                 outbox.UsePostgres();

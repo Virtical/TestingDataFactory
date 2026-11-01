@@ -7,4 +7,5 @@ public static class MessagingTopology
     public const string SpecificationGeneratedExchange = "data-factory-specification-generated-v1";
     public const string JobFailedExchange = "data-factory-job-failed-v1";
     public const string GenerateSpecificationQueue = "data-factory-generate-specification-v1";
+    public const string SpecificationJobEventsQueue = "data-factory-api-specification-events-v1";
 }
