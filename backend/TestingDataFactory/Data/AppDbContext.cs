@@ -1,4 +1,6 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using TestingDataFactory.Configuration;
 using TestingDataFactory.Users;
 
 namespace TestingDataFactory.Data;
@@ -9,6 +11,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema(DatabaseConfiguration.DefaultSchemaName);
+        modelBuilder.AddTransactionalOutboxEntities();
+
         modelBuilder.Entity<User>(user =>
         {
             user.HasIndex(u => u.Email).IsUnique();

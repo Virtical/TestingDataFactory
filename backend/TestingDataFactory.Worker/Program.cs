@@ -1,7 +1,7 @@
-using TestingDataFactory.Worker;
+using TestingDataFactory.Worker.Messaging;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
+builder.Services.AddSpecificationWorkerMessaging(builder.Configuration);
 
 var host = builder.Build();
 host.Run();
