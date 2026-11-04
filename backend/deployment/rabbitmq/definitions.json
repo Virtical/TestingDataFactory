@@ -1,0 +1,15 @@
+{
+  "vhosts": [
+    { "name": "testing-data-factory" }
+  ],
+  "policies": [
+    {
+      "vhost": "testing-data-factory",
+      "name": "specification-fault-retention",
+      "pattern": "^data-factory-(generate-specification|api-specification-events)-v1_(error|skipped)$",
+      "apply-to": "queues",
+      "priority": 10,
+      "definition": { "message-ttl": 604800000 }
+    }
+  ]
+}

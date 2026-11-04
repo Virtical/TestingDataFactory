@@ -35,6 +35,19 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<WorkerDbContext>(options => options.UseNpgsql(connectionString,
             postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", DatabaseConfiguration.DefaultSchemaName)));
 
+        services.AddOptions<ModelClientOptions>()
+            .Bind(configuration.GetSection(ModelClientOptions.SectionName))
+            .Validate(options => options.RequestTimeout > TimeSpan.Zero
+                && options.RequestTimeout <= TimeSpan.FromMinutes(5),
+                "ModelClient RequestTimeout must be greater than zero and at most five minutes.")
+            .ValidateOnStart();
+
+        services.Configure<MassTransitHostOptions>(options =>
+        {
+            options.ConsumerStopTimeout = TimeSpan.FromSeconds(25);
+            options.StopTimeout = TimeSpan.FromSeconds(35);
+        });
+
         services.AddScoped<ISpecificationGenerationService, SpecificationGenerationService>();
         services.TryAddScoped<ISpecificationModelClient, UnconfiguredSpecificationModelClient>();
         services.TryAddSingleton<ISpecificationResponseExtractor, MarkdownSpecificationResponseExtractor>();
