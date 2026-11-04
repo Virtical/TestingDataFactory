@@ -1,9 +1,13 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using TestingDataFactory.Worker.Configuration;
 using TestingDataFactory.Contracts;
 using TestingDataFactory.Worker.Data;
+using TestingDataFactory.Worker.Specifications.Extraction;
+using TestingDataFactory.Worker.Specifications.Model;
+using TestingDataFactory.Worker.Specifications.Validation;
 
 namespace TestingDataFactory.Worker.Messaging;
 
@@ -30,8 +34,14 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<WorkerDbContext>(options => options.UseNpgsql(connectionString,
             postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", DatabaseConfiguration.DefaultSchemaName)));
 
+        services.TryAddScoped<ISpecificationModelClient, UnconfiguredSpecificationModelClient>();
+        services.TryAddSingleton<ISpecificationResponseExtractor, MarkdownSpecificationResponseExtractor>();
+        services.TryAddSingleton<ISpecificationValidator, NoOpSpecificationValidator>();
+
         services.AddMassTransit(bus =>
         {
+            bus.AddConsumer<GenerateSpecificationConsumer>()
+                .Endpoint(endpoint => endpoint.Name = MessagingTopology.GenerateSpecificationQueue);
             bus.AddEntityFrameworkOutbox<WorkerDbContext>(outbox =>
             {
                 outbox.UsePostgres();
@@ -55,7 +65,6 @@ public static class ServiceCollectionExtensions
                     message => message.SetEntityName(MessagingTopology.SpecificationGeneratedExchange));
                 transport.Message<JobFailed>(
                     message => message.SetEntityName(MessagingTopology.JobFailedExchange));
-                // Consumers и их receive endpoints добавляются на последующих этапах.
                 transport.ConfigureEndpoints(context);
             });
         });
