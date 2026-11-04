@@ -1,16 +1,13 @@
 using MassTransit;
 using TestingDataFactory.Contracts;
-using TestingDataFactory.Worker.Specifications.Extraction;
+using TestingDataFactory.Worker.Specifications;
 using TestingDataFactory.Worker.Specifications.Model;
-using TestingDataFactory.Worker.Specifications.Validation;
 
 namespace TestingDataFactory.Worker.Messaging;
 
 internal sealed class GenerateSpecificationConsumer(
     IBus bus,
-    ISpecificationModelClient modelClient,
-    ISpecificationResponseExtractor responseExtractor,
-    ISpecificationValidator validator) : IConsumer<GenerateSpecification>
+    ISpecificationGenerationService generationService) : IConsumer<GenerateSpecification>
 {
     public async Task Consume(ConsumeContext<GenerateSpecification> context)
     {
@@ -26,50 +23,38 @@ internal sealed class GenerateSpecificationConsumer(
             return;
         }
 
-        await bus.Publish(new JobStarted(command.JobId, command.ContractVersion, DateTimeOffset.UtcNow),
-            publish => publish.CorrelationId = command.JobId, context.CancellationToken);
+        var retryAttempt = context.GetRetryAttempt();
+        if (retryAttempt == 0)
+        {
+            await bus.Publish(new JobStarted(command.JobId, command.ContractVersion, DateTimeOffset.UtcNow),
+                publish => publish.CorrelationId = command.JobId, context.CancellationToken);
+        }
 
-        string response;
+        SpecificationGenerationResult result;
         try
         {
-            response = await modelClient.GenerateAsync(command.Prompt, context.CancellationToken);
+            result = await generationService.GenerateAsync(command.Prompt, context.CancellationToken);
         }
-        catch (PermanentModelException exception)
+        catch (TransientModelException) when (retryAttempt >= SpecificationGenerationRetry.RetryLimit
+            && !context.CancellationToken.IsCancellationRequested)
         {
-            switch (exception.Failure)
-            {
-                case PermanentModelFailure.NotConfigured:
-                    await PublishFailureAsync(context, SpecificationGenerationErrorCodes.ModelNotConfigured,
-                        "Генерация спецификаций пока недоступна.");
-                    return;
-                case PermanentModelFailure.Rejected:
-                    await PublishFailureAsync(context, SpecificationGenerationErrorCodes.ModelRejected,
-                        "Модель не смогла обработать запрос.");
-                    return;
-                default:
-                    throw;
-            }
-        }
-
-        var yaml = responseExtractor.ExtractYaml(response);
-        // TODO(этап 5): определить, следует ли повторять генерацию при пустом ответе модели.
-        if (string.IsNullOrWhiteSpace(yaml))
-        {
-            await PublishFailureAsync(context, SpecificationGenerationErrorCodes.EmptyModelResponse,
-                "Модель вернула пустую спецификацию.");
+            await PublishFailureAsync(context, SpecificationGenerationErrorCodes.ModelTemporarilyUnavailable,
+                "Модель временно недоступна. Попробуйте запустить генерацию позже.");
             return;
         }
-
-        // TODO: обсудить ограниченный цикл исправления YAML, когда валидатор начнёт возвращать детали ошибок.
-        if (!await validator.IsValidAsync(yaml, context.CancellationToken))
+        switch (result)
         {
-            await PublishFailureAsync(context, SpecificationGenerationErrorCodes.InvalidSpecification,
-                "Модель вернула некорректную спецификацию.");
-            return;
+            case SpecificationGenerationResult.Succeeded success:
+                await context.Publish(
+                    new SpecificationGenerated(command.JobId, command.ContractVersion, DateTimeOffset.UtcNow, success.Yaml),
+                    publish => publish.CorrelationId = command.JobId, context.CancellationToken);
+                break;
+            case SpecificationGenerationResult.Failed failure:
+                await PublishFailureAsync(context, failure.Code, failure.Message);
+                break;
+            default:
+                throw new InvalidOperationException("Unsupported specification generation result.");
         }
-
-        await context.Publish(new SpecificationGenerated(command.JobId, command.ContractVersion, DateTimeOffset.UtcNow, yaml),
-            publish => publish.CorrelationId = command.JobId, context.CancellationToken);
     }
 
     private static Task PublishFailureAsync(ConsumeContext<GenerateSpecification> context, string code, string message) =>

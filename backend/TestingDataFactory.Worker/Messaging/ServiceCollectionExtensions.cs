@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using TestingDataFactory.Worker.Configuration;
 using TestingDataFactory.Contracts;
 using TestingDataFactory.Worker.Data;
+using TestingDataFactory.Worker.Specifications;
 using TestingDataFactory.Worker.Specifications.Extraction;
 using TestingDataFactory.Worker.Specifications.Model;
 using TestingDataFactory.Worker.Specifications.Validation;
@@ -34,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<WorkerDbContext>(options => options.UseNpgsql(connectionString,
             postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", DatabaseConfiguration.DefaultSchemaName)));
 
+        services.AddScoped<ISpecificationGenerationService, SpecificationGenerationService>();
         services.TryAddScoped<ISpecificationModelClient, UnconfiguredSpecificationModelClient>();
         services.TryAddSingleton<ISpecificationResponseExtractor, MarkdownSpecificationResponseExtractor>();
         services.TryAddSingleton<ISpecificationValidator, NoOpSpecificationValidator>();
@@ -48,8 +50,13 @@ public static class ServiceCollectionExtensions
                 outbox.DuplicateDetectionWindow = TimeSpan.FromHours(24);
                 outbox.QueryDelay = TimeSpan.FromSeconds(1);
             });
-            bus.AddConfigureEndpointsCallback((context, _, endpoint) =>
-                endpoint.UseEntityFrameworkOutbox<WorkerDbContext>(context));
+            bus.AddConfigureEndpointsCallback((context, name, endpoint) =>
+            {
+                if (name == MessagingTopology.GenerateSpecificationQueue)
+                    endpoint.UseMessageRetry(SpecificationGenerationRetry.Configure);
+
+                endpoint.UseEntityFrameworkOutbox<WorkerDbContext>(context);
+            });
 
             bus.UsingRabbitMq((context, transport) =>
             {
