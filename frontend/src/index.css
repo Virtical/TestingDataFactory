@@ -7,6 +7,7 @@
 :root {
     /* Основные цвета */
     --color-bg: #F3F8FD;
+    --color-bg-tag: #F3F3F3;
     --color-surface: #ffffff;
     --color-text: #000000;
     --color-text-inverse: #ffffff;
@@ -18,9 +19,15 @@
     /* Кнопки / акценты */
     --color-primary: #6b6b6b;
     --color-primary-hover: #1a1d1f;
+    --color-accent: #4073FF;
+    --color-account: #E6EFFF;
+    --color-background-icon: #EFF3FF;
+    --color-icon: #0466DE;
+    --color-checkmark-muted: #6B7280;
 
     /* Состояния / ховеры */
     --color-surface-hover: #e8eef5;
+    --color-accent-hover: #3260d6;
     --color-error: #d33;
 
     font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
@@ -59,6 +66,28 @@ a {
     align-items: center;
     justify-content: center;
     padding: 40px 16px;
+}
+
+.layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+.layout__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.layout__content {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
 }
 
 .form-field {
