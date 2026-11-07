@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Bogus" Version="35.6.5" />
+    <PackageReference Include="Cel.NET" Version="2.3.1" />
+    <PackageReference Include="YamlDotNet" Version="13.3.1" />
+  </ItemGroup>
+
 </Project>

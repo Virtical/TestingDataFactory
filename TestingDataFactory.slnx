@@ -2,5 +2,6 @@
   <Folder Name="/backend/">
     <Project Path="backend/TestingDataFactory.Backend/TestingDataFactory.Backend.csproj" />
     <Project Path="backend/TestingDataFactory.Core/TestingDataFactory.Core.csproj" />
+    <Project Path="backend/TestingDataFactory.Core.Tests/TestingDataFactory.Core.Tests.csproj" />
   </Folder>
 </Solution>
