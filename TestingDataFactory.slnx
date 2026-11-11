@@ -5,5 +5,6 @@
     <Project Path="backend/TestingDataFactory/TestingDataFactory.csproj" />
     <Project Path="backend\TestingDataFactory.CLI\TestingDataFactory.CLI.csproj" Type="Classic C#" />
     <Project Path="backend\TestingDataFactory.Worker\TestingDataFactory.Worker.csproj" Type="Classic C#" />
+    <Project Path="backend/TestingDataFactory.Worker.Tests/TestingDataFactory.Worker.Tests.csproj" />
   </Folder>
 </Solution>

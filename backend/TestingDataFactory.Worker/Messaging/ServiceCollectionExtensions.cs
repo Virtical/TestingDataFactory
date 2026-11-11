@@ -1,4 +1,9 @@
 using MassTransit;
+using Microsoft.Extensions.AI;
+using OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
+using System.ClientModel.Primitives;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -35,8 +40,18 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<WorkerDbContext>(options => options.UseNpgsql(connectionString,
             postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", DatabaseConfiguration.DefaultSchemaName)));
 
+        var configuredModelOptions = configuration.GetSection(ModelClientOptions.SectionName).Get<ModelClientOptions>()
+            ?? new ModelClientOptions();
+
         services.AddOptions<ModelClientOptions>()
             .Bind(configuration.GetSection(ModelClientOptions.SectionName))
+            .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var endpoint)
+                && endpoint.Scheme == Uri.UriSchemeHttps,
+                "ModelClient BaseUrl must be an absolute HTTPS URI.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Model),
+                "ModelClient Model is required.")
+            .Validate(options => options.MaxOutputTokens is > 0 and <= 393216,
+                "ModelClient MaxOutputTokens must be between 1 and 393216.")
             .Validate(options => options.RequestTimeout > TimeSpan.Zero
                 && options.RequestTimeout <= TimeSpan.FromMinutes(5),
                 "ModelClient RequestTimeout must be greater than zero and at most five minutes.")
@@ -49,7 +64,27 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<ISpecificationGenerationService, SpecificationGenerationService>();
-        services.TryAddScoped<ISpecificationModelClient, UnconfiguredSpecificationModelClient>();
+        if (string.IsNullOrWhiteSpace(configuredModelOptions.ApiKey))
+        {
+            services.TryAddScoped<ISpecificationModelClient, UnconfiguredSpecificationModelClient>();
+        }
+        else
+        {
+            services.TryAddSingleton<IChatClient>(_ =>
+            {
+                var client = new ChatClient(
+                    configuredModelOptions.Model,
+                    new ApiKeyCredential(configuredModelOptions.ApiKey),
+                    new OpenAIClientOptions
+                    {
+                        Endpoint = new Uri(configuredModelOptions.BaseUrl),
+                        RetryPolicy = new ClientRetryPolicy(0)
+                    });
+
+                return client.AsIChatClient();
+            });
+            services.TryAddScoped<ISpecificationModelClient, DeepSeekSpecificationModelClient>();
+        }
         services.TryAddSingleton<ISpecificationResponseExtractor, MarkdownSpecificationResponseExtractor>();
         services.TryAddSingleton<ISpecificationValidator, NoOpSpecificationValidator>();
 
