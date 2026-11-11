@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/backend/">
-    <Project Path="backend/TestingDataFactory.Backend/TestingDataFactory.Backend.csproj" />
-    <Project Path="backend/TestingDataFactory.Core/TestingDataFactory.Core.csproj" />
+    <Project Path="backend/TestingDataFactory.Api/TestingDataFactory.Api.csproj" />
+    <Project Path="backend/TestingDataFactory/TestingDataFactory.csproj" />
   </Folder>
 </Solution>
