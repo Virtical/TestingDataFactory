@@ -14,4 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../TestingDataFactory.Core/TestingDataFactory.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Specifications/Examples/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -50,28 +50,28 @@ public class YamlSpecificationExpressionsTests
         Assert.That(((DictionaryEnumDefinition)spec.Types["geo"]).Where!.Dependencies, Is.EquivalentTo(new[] { "country" }));
     }
 
-    [Test]
-    public void SupportsDerivedWithoutExplicitType()
+    [TestCase("{ derived: value * 2 }")]
+    [TestCase("{ type: null, derived: value * 2 }")]
+    [TestCase("{ type: '', derived: value * 2 }")]
+    public void RejectsDerivedWithoutExplicitType(string field)
     {
-        var result = parser.Parse(Document("{ derived: value * 2 }"));
-        Assert.That(result.IsSuccess, Is.True, string.Join("; ", result.Diagnostics.Select(d => d.Message)));
-        var field = result.Specification!.Tables["items"].Fields["output"];
-        Assert.That(field.Type, Is.EqualTo(FieldType.Dynamic));
-        Assert.That(field.Derived!.Dependencies, Is.EquivalentTo(new[] { "value" }));
+        var result = parser.Parse(Document(field));
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.Diagnostics.Any(d => d.Code == "INVALID_FIELD_TYPE" && d.Path == "$.tables['items'].fields['output'].type"), Is.True);
     }
 
-    [TestCase("value + 1")]
-    [TestCase("value == null ? 0 : value")]
-    [TestCase("value in [1, 2, -3]")]
-    [TestCase("size('abc') > 0")]
-    [TestCase("'abc'.contains('b')")]
-    [TestCase("'abc'.startsWith('a')")]
-    [TestCase("'abc'.endsWith('c')")]
-    [TestCase("'abc'.matches('a.*')")]
-    [TestCase("value % 2 == 0 && !(value < 0)")]
-    public void AcceptsAllowedCelOperations(string expr)
+    [TestCase("value + 1", "integer")]
+    [TestCase("value == null ? 0 : value", "integer")]
+    [TestCase("value in [1, 2, -3]", "boolean")]
+    [TestCase("size('abc') > 0", "boolean")]
+    [TestCase("'abc'.contains('b')", "boolean")]
+    [TestCase("'abc'.startsWith('a')", "boolean")]
+    [TestCase("'abc'.endsWith('c')", "boolean")]
+    [TestCase("'abc'.matches('a.*')", "boolean")]
+    [TestCase("value % 2 == 0 && !(value < 0)", "boolean")]
+    public void AcceptsAllowedCelOperations(string expr, string type)
     {
-        var result = parser.Parse(Document("{ derived: \"" + expr.Replace("\"", "\\\"") + "\" }"));
+        var result = parser.Parse(Document("{ type: " + type + ", derived: \"" + expr.Replace("\"", "\\\"") + "\" }"));
         Assert.That(result.IsSuccess, Is.True, string.Join("; ", result.Diagnostics.Select(d => d.Message)));
     }
 
@@ -87,7 +87,7 @@ public class YamlSpecificationExpressionsTests
     [TestCase("value +")]
     public void RejectsUnknownNamesAndUnsupportedCel(string expr)
     {
-        var result = parser.Parse(Document("{ derived: \"" + expr + "\" }"));
+        var result = parser.Parse(Document("{ type: integer, derived: \"" + expr + "\" }"));
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Diagnostics.Select(d => d.Code), Does.Contain("INVALID_CEL"));
     }

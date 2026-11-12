@@ -7,7 +7,7 @@ public sealed record TableDefinition(string Name, IReadOnlyDictionary<string, Fi
 
 public enum FieldType
 {
-    Integer, Decimal, String, Regex, Boolean, Date, DateTime, Time, Uuid, Enum, Reference, Dynamic
+    Integer, Decimal, String, Regex, Boolean, Date, DateTime, Time, Uuid, Enum, Reference, Dynamic, Object, Array
 }
 
 /// <summary>Поле базового типа. Числовые и временные границы включительные.</summary>
@@ -32,7 +32,11 @@ public sealed record FieldDefinition(
     string? Generator = null,
     string? Locale = null,
     CelExpression? Derived = null,
-    DistributionDefinition? Distribution = null);
+    DistributionDefinition? Distribution = null,
+    IReadOnlyDictionary<string, FieldDefinition>? Fields = null,
+    FieldDefinition? Items = null,
+    int? MinItems = null,
+    int? MaxItems = null);
 
 /// <summary>Дата, время или дата и время; отсутствие смещения обозначает локальное время без часового пояса.</summary>
 public sealed record TemporalBound(DateOnly? Date, TimeOnly? Time, TimeSpan? UtcOffset);

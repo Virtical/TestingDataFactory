@@ -15,8 +15,26 @@ internal static class CelExpressionValidator
         "_+_", "_-_", "-_", "_*_", "_/_", "_%_", "@in", "size", "contains", "startsWith", "endsWith", "matches"
     };
 
+    // Only defer a syntactically valid expression that actually uses an unavailable field.
+    // Syntax and unsupported-operation errors can still be reported independently.
+    public static bool ReferencesAny(string source, IReadOnlySet<string> unavailable)
+    {
+        if (source.Length > 4096 || NestingTooDeep(source)) return false;
+        var savedCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            var parsed = Cel.Env.NewEnv(EnvOptions.ClearMacros()).Parse(source);
+            if (parsed.HasIssues() || parsed.Ast is null) return false;
+            var dependencies = new HashSet<string>(StringComparer.Ordinal);
+            return CheckNode(parsed.Ast.Expr, dependencies, false, 0, out _) && dependencies.Overlaps(unavailable);
+        }
+        finally { CultureInfo.CurrentCulture = savedCulture; }
+    }
+
     public static (CelExpression? Expression, string? Error) Validate(string source, IEnumerable<string> variables,
-        bool booleanResult = false, FieldType? expectedType = null, IReadOnlyDictionary<string, FieldType>? variableTypes = null)
+        bool booleanResult = false, FieldType? expectedType = null, IReadOnlyDictionary<string, FieldType>? variableTypes = null,
+        IReadOnlyDictionary<string, FieldDefinition>? fields = null)
     {
         if (source.Length > 4096 || NestingTooDeep(source)) return (null, "Выражение слишком длинное или слишком глубоко вложено.");
         var savedCulture = CultureInfo.CurrentCulture;
@@ -32,6 +50,8 @@ internal static class CelExpressionValidator
             if (!CheckNode(parsed.Ast.Expr, dependencies, false, 0, out var error)) return (null, error);
             var checkedAst = environment.Check(parsed.Ast);
             if (checkedAst.HasIssues() || checkedAst.Ast is null) return (null, checkedAst.Issues?.ToString() ?? "Не удалось проверить CEL-выражение.");
+            var typeError = CelExpressionTypeChecker.Validate(parsed.Ast.Expr, variableTypes, fields, booleanResult, expectedType);
+            if (typeError is not null) return (null, typeError);
             var result = checkedAst.Ast.ResultType;
             if (result is null) return (null, "Не удалось определить тип результата CEL-выражения.");
             if (result.Equals(Decls.Dyn) && parsed.Ast.Expr.ExprKindCase == Expr.ExprKindOneofCase.IdentExpr &&
@@ -71,6 +91,8 @@ internal static class CelExpressionValidator
             case Expr.ExprKindOneofCase.IdentExpr:
                 dependencies.Add(expr.IdentExpr.Name);
                 return true;
+            case Expr.ExprKindOneofCase.SelectExpr when !expr.SelectExpr.TestOnly:
+                return CheckNode(expr.SelectExpr.Operand, dependencies, false, depth + 1, out error);
             case Expr.ExprKindOneofCase.ConstExpr:
                 if (expr.ConstExpr.HasNullValue || expr.ConstExpr.HasBoolValue || expr.ConstExpr.HasInt64Value ||
                     expr.ConstExpr.HasDoubleValue || expr.ConstExpr.HasStringValue) return true;

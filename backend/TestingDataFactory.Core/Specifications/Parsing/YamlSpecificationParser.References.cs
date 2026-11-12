@@ -99,7 +99,7 @@ public sealed partial class YamlSpecificationParser
                     if (checkedField is not null)
                     {
                         CheckReferenceCompatibility(checkedField, target, path, source, errors);
-                        fields.Add(fieldName, checkedField with { Reference = reference, Locale = checkedField.Locale ?? defaultLocale });
+                        fields.Add(fieldName, ApplyLocale(checkedField with { Reference = reference }, defaultLocale));
                     }
                 }
                 else fields.Add(fieldName, field);

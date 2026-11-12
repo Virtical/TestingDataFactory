@@ -1,0 +1,36 @@
+spec_version: '1.0'
+locale: ru_RU
+ 
+types:
+  city:    { enum: { dictionary: russian_cities } }
+  status:  { enum: { new: 0.2, paid: 0.6, shipped: 0.2 } }
+  product: { enum: [Ноутбук, Мышь, Монитор, Кабель] }
+ 
+tables:
+  customers:
+    fields:
+      id:    { type: integer, primary: true }
+      name:  { generator: person.full_name, pii: true }
+      email: { generator: internet.email, unique: true, pii: true }
+      city:  { type: city }
+ 
+  orders:
+    fields:
+      id:          { type: integer, primary: true }
+      customer_id: { ref: customers.id, per_parent: { min: 0, max: 8 } }
+      status:      { type: status }
+      created_at:  { type: datetime, min: '2025-01-01', max: '2026-10-01' }
+ 
+  order_items:
+    fields:
+      id:       { type: integer, primary: true }
+      order_id: { ref: orders.id, per_parent: { min: 1, max: 5 } }
+      product:  { type: product }
+      quantity: { type: integer, min: 1, max: 5 }
+      price:    { type: decimal, min: 100, max: 90000, scale: 2, distribution: lognormal }
+      amount:   { type: decimal, scale: 2, derived: quantity * price }
+ 
+generation:
+  seed: 2026
+  rows: { customers: 500 }
+  output: { sql: { dialect: postgresql, style: script } }

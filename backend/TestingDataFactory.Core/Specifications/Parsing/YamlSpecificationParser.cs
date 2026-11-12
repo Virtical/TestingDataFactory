@@ -21,7 +21,8 @@ public sealed partial class YamlSpecificationParser
     {
         ["integer"] = FieldType.Integer, ["decimal"] = FieldType.Decimal, ["string"] = FieldType.String,
         ["regex"] = FieldType.Regex, ["boolean"] = FieldType.Boolean, ["date"] = FieldType.Date,
-        ["datetime"] = FieldType.DateTime, ["time"] = FieldType.Time, ["uuid"] = FieldType.Uuid
+        ["datetime"] = FieldType.DateTime, ["time"] = FieldType.Time, ["uuid"] = FieldType.Uuid,
+        ["object"] = FieldType.Object, ["array"] = FieldType.Array
     };
 
     public SpecificationParseResult Parse(string yaml, SpecificationParsePurpose purpose = SpecificationParsePurpose.Generation)
@@ -62,7 +63,7 @@ public sealed partial class YamlSpecificationParser
             }
 
             var (resolvedTables, tableOrder) = ResolveReferences(parsedTables, references, types, errors, defaultLocale);
-            if (errors.Count == 0) CheckTableExpressions(resolvedTables, tables, errors);
+            CheckTableExpressions(parsedTables, resolvedTables, tables, errors);
             var generation = validationOnly ? null : ReadGeneration(Get(root, "generation"), resolvedTables, errors);
             return errors.Count == 0
                 ? new(new Specification(structure.Structure!.Version, structure.Structure.Locale, new ReadOnlyDictionary<string, TypeDefinition>(types),
@@ -111,7 +112,7 @@ public sealed partial class YamlSpecificationParser
                     references.Add((name, fieldName), mapping);
             }
             else field = ReadField(fieldNode, fieldPath, errors, typeName => types.GetValueOrDefault(typeName));
-            if (fieldName is not null && field is not null) result.Add(fieldName, field with { Locale = field.Locale ?? defaultLocale });
+            if (fieldName is not null && field is not null) result.Add(fieldName, ApplyLocale(field, defaultLocale));
         }
         return name is null ? null : new(name, new ReadOnlyDictionary<string, FieldDefinition>(result), Array.Empty<RuleDefinition>());
     }
@@ -130,8 +131,8 @@ public sealed partial class YamlSpecificationParser
             : generatorNode is not null
             ? ["generator", "primary", "unique", "pii", "null_rate", "min_length", "max_length", "locale", "distribution"]
             : isType
-            ? ["type", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "locale"]
-            : ["type", "derived", "primary", "unique", "pii", "null_rate", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "column", "locale", "distribution"], path, errors);
+            ? ["type", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "locale", "fields", "items", "min_items", "max_items"]
+            : ["type", "derived", "primary", "unique", "pii", "null_rate", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "column", "locale", "distribution", "fields", "items", "min_items", "max_items"], path, errors);
         string? generator = null;
         if (generatorNode is not null)
         {
@@ -141,10 +142,12 @@ public sealed partial class YamlSpecificationParser
         }
         var typeNode = Get(field, "type");
         string? typeName = referencedType?.NamedType;
-        if (referencedType is null && generatorNode is null && (typeNode is not null || derivedNode is null) &&
+        if (referencedType is null && generatorNode is null &&
             (typeNode is not YamlScalarNode { Value: not null } typeScalar || !IsString(typeScalar)))
         {
-            Error(errors, "INVALID_FIELD_TYPE", "Укажите базовый или объявленный тип.", path + ".type", typeNode ?? node);
+            Error(errors, "INVALID_FIELD_TYPE", derivedNode is not null
+                ? "Для derived укажите базовый или объявленный тип результата."
+                : "Укажите базовый или объявленный тип.", path + ".type", typeNode ?? node);
             return null;
         }
         if (referencedType is null && generatorNode is null && typeNode is not null) typeName = ((YamlScalarNode)typeNode).Value!;
@@ -152,7 +155,6 @@ public sealed partial class YamlSpecificationParser
         TypeDefinition? named = null;
         FieldType type;
         if (generatorNode is not null) type = FieldType.String;
-        else if (referencedType is null && typeName is null) type = FieldType.Dynamic;
         else if (referencedType is not null)
         {
             type = referencedType.Type;
@@ -169,6 +171,7 @@ public sealed partial class YamlSpecificationParser
             type = named is PrimitiveTypeDefinition primitive ? primitive.Field.Type : FieldType.Enum;
         }
         var inherited = (named as PrimitiveTypeDefinition)?.Field;
+        var (nestedFields, items, minItems, maxItems) = ReadComposite(field, path, errors, resolve, type, inherited ?? referencedType);
         var locale = ReadLocale(field, path, errors) ?? named?.Locale ?? inherited?.Locale;
         var distribution = ReadDistribution(field, path, errors, type, isType, derivedNode is not null);
 
@@ -231,7 +234,8 @@ public sealed partial class YamlSpecificationParser
         var derivedSource = derivedNode is null ? null : Name(derivedNode, path + ".derived", errors);
         return new(type, primary, primary || unique, pii, nullRate, min, max, scale, minLength, maxLength, pattern, trueRate,
             named is null ? null : typeName, column, TemporalMin: temporalMin, TemporalMax: temporalMax, Generator: generator, Locale: locale,
-            Derived: derivedSource is null ? null : new CelExpression(derivedSource, Array.Empty<string>()), Distribution: distribution);
+            Derived: derivedSource is null ? null : new CelExpression(derivedSource, Array.Empty<string>()), Distribution: distribution,
+            Fields: nestedFields, Items: items, MinItems: minItems, MaxItems: maxItems);
     }
 
     private static void CheckKeys(YamlMappingNode mapping, string[] allowed, string path, List<SpecificationDiagnostic> errors)
