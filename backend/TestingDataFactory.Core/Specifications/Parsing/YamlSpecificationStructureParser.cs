@@ -6,7 +6,7 @@ using YamlDotNet.Core.Events;
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
 /// <summary>Проверяет верхний уровень YAML, не проверяя содержимое разделов.</summary>
-public sealed class YamlSpecificationStructureParser
+internal sealed class YamlSpecificationStructureParser
 {
     private const int MaxLength = 1_000_000;
     private const int MaxDepth = 64;

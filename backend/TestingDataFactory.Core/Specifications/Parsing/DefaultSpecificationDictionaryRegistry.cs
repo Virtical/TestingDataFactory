@@ -1,7 +1,7 @@
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
 /// <summary>Справочники, упомянутые в спецификации формата.</summary>
-public sealed class DefaultSpecificationDictionaryRegistry : ISpecificationDictionaryRegistry
+internal sealed class DefaultSpecificationDictionaryRegistry : ISpecificationDictionaryRegistry
 {
     private static readonly IReadOnlyList<string> WorldCityColumns = Array.AsReadOnly(new[] { "country", "city", "currency" });
 

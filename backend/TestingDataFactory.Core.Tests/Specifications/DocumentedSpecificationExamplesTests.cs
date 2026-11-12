@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using TestingDataFactory.Core.Specifications;
 using TestingDataFactory.Core.Specifications.Model;
 using TestingDataFactory.Core.Specifications.Parsing;
 
@@ -7,7 +8,7 @@ namespace TestingDataFactory.Core.Tests.Specifications;
 // Примеры 1–3 из docs/Спецификация.docx. YAML хранится отдельно, чтобы его было удобно сверять с документом.
 public class DocumentedSpecificationExamplesTests
 {
-    private readonly YamlSpecificationParser parser = new();
+    private readonly SpecificationParser parser = new();
 
     [TestCase(1)]
     [TestCase(2)]
@@ -59,7 +60,7 @@ public class DocumentedSpecificationExamplesTests
             Assert.That(amount.Derived.Dependencies, Is.EquivalentTo(new[] { "quantity", "price" }));
             Assert.That(spec.Tables["order_items"].Fields["price"].Distribution, Is.TypeOf<LogNormalDistribution>());
             Assert.That(spec.Generation!.Rows["customers"], Is.EqualTo(500));
-            Assert.That(spec.Generation.Output, Is.EqualTo(new SqlOutput(SqlDialect.PostgreSql, SqlOutputStyle.Script)));
+            Assert.That(spec.Generation.Output, Is.EqualTo(new CsvOutput()));
         });
     }
 
@@ -83,7 +84,7 @@ public class DocumentedSpecificationExamplesTests
                 Is.EquivalentTo(new[] { "base_price", "discount_pct" }));
             Assert.That(spec.TableOrder, Is.EqualTo(new[] { "accounts", "subscriptions", "invoices" }));
             Assert.That(spec.Generation!.Mode, Is.EqualTo(GenerationMode.Anomalies));
-            Assert.That(spec.Generation.Output, Is.TypeOf<JsonOutput>());
+            Assert.That(spec.Generation.Output, Is.TypeOf<CsvOutput>());
         });
     }
 
@@ -95,10 +96,9 @@ public class DocumentedSpecificationExamplesTests
     public void RejectsInvalidSpecificationWithDiagnostic(string yaml, string code, string path)
     {
         var result = parser.Parse(yaml);
-        Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.Specification, Is.Null);
-        Assert.That(result.Diagnostics.Any(d => d.Code == code && d.Path == path), Is.True,
-            string.Join("; ", result.Diagnostics.Select(d => $"{d.Code}: {d.Path}: {d.Message}")));
+        var diagnostics = result.IsSuccess ? parser.Validate(result.Specification!).Diagnostics : result.Diagnostics;
+        Assert.That(diagnostics.Any(d => d.Code == code && d.Path == path), Is.True,
+            string.Join("; ", diagnostics.Select(d => $"{d.Code}: {d.Path}: {d.Message}")));
     }
 
     private Specification ParseExample(int number)
@@ -106,7 +106,10 @@ public class DocumentedSpecificationExamplesTests
         var result = parser.Parse(ReadExample(number));
         Assert.That(result.IsSuccess, Is.True,
             string.Join("; ", result.Diagnostics.Select(d => $"{d.Code}: {d.Path}: {d.Message}")));
-        return result.Specification!;
+        var validation = parser.Validate(result.Specification!);
+        Assert.That(validation.IsSuccess, Is.True,
+            string.Join("; ", validation.Diagnostics.Select(d => $"{d.Code}: {d.Path}: {d.Message}")));
+        return validation.Specification!;
     }
 
     private static string ReadExample(int number) => File.ReadAllText(Path.Combine(

@@ -15,6 +15,20 @@ internal static class CelExpressionValidator
         "_+_", "_-_", "-_", "_*_", "_/_", "_%_", "@in", "size", "contains", "startsWith", "endsWith", "matches"
     };
 
+    internal static string? ValidateSyntax(string source)
+    {
+        if (source.Length > 4096 || NestingTooDeep(source)) return "Выражение слишком длинное или слишком глубоко вложено.";
+        var savedCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            var parsed = Cel.Env.NewEnv(EnvOptions.ClearMacros()).Parse(source);
+            if (parsed.HasIssues() || parsed.Ast is null) return parsed.Issues?.ToString() ?? "Не удалось разобрать CEL-выражение.";
+            return CheckNode(parsed.Ast.Expr, new HashSet<string>(StringComparer.Ordinal), false, 0, out var error) ? null : error;
+        }
+        finally { CultureInfo.CurrentCulture = savedCulture; }
+    }
+
     // Only defer a syntactically valid expression that actually uses an unavailable field.
     // Syntax and unsupported-operation errors can still be reported independently.
     public static bool ReferencesAny(string source, IReadOnlySet<string> unavailable)

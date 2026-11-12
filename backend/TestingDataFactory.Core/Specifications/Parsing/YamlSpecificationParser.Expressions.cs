@@ -5,9 +5,9 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
-    private static void CheckTableExpressions(Dictionary<string, TableDefinition> parsedTables,
+    private static void CheckTableExpressions(IReadOnlyDictionary<string, TableDefinition> parsedTables,
         Dictionary<string, TableDefinition> tables, YamlMappingNode tableNodes,
         List<SpecificationDiagnostic> errors)
     {

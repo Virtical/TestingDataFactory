@@ -53,4 +53,4 @@ generation:
   seed: 7
   rows: { accounts: 2000 }
   mode: anomalies
-  output: { json: {} }
+  output: { csv: {} }

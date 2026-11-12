@@ -5,7 +5,7 @@ using TestingDataFactory.Core.Specifications.Model;
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
 /// <summary>Применяет параметры CLI или формы и повторно проверяет полученный результат.</summary>
-public static class GenerationOptionsMerger
+internal static class GenerationOptionsMerger
 {
     public static GenerationOptionsResult Apply(Specification specification, GenerationOverrides overrides)
     {

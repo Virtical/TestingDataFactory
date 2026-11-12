@@ -5,7 +5,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private static (IReadOnlyDictionary<string, FieldDefinition>? Fields, FieldDefinition? Items, int? MinItems, int? MaxItems)
         ReadComposite(YamlMappingNode node, string path, List<SpecificationDiagnostic> errors,

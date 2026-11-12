@@ -7,10 +7,10 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private static GenerationOptions? ReadGeneration(YamlNode? node, IReadOnlyDictionary<string, TableDefinition> tables,
-        List<SpecificationDiagnostic> errors)
+        List<SpecificationDiagnostic> errors, bool validateReferences = true)
     {
         if (node is null) return null;
         if (node is not YamlMappingNode generation)
@@ -52,7 +52,7 @@ public sealed partial class YamlSpecificationParser
         }
         var output = ReadOutput(Get(generation, "output"), path + ".output", errors);
         var options = new GenerationOptions(seed, new ReadOnlyDictionary<string, int>(rows), mode, output);
-        foreach (var diagnostic in GenerationOptionsMerger.Validate(options, tables))
+        foreach (var diagnostic in validateReferences ? GenerationOptionsMerger.Validate(options, tables) : [])
         {
             if (locations.TryGetValue(diagnostic.Path, out var source))
                 errors.Add(diagnostic with { Line = source.Start.Line, Column = source.Start.Column });

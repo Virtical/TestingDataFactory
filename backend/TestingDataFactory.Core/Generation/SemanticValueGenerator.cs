@@ -4,7 +4,7 @@ using TestingDataFactory.Core.Specifications.Model;
 namespace TestingDataFactory.Core.Generation;
 
 /// <summary>Генератор значений одного поля с локальным состоянием и seed.</summary>
-public sealed class SemanticValueGenerator
+internal sealed class SemanticValueGenerator
 {
     private const int MaxAttempts = 1000;
     private readonly Faker faker;

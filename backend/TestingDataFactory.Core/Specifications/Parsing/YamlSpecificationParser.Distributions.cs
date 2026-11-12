@@ -4,7 +4,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private static DistributionDefinition? ReadDistribution(YamlMappingNode field, string fieldPath,
         List<SpecificationDiagnostic> errors, FieldType type, bool isType, bool isDerived)

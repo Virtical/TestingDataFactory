@@ -3,7 +3,7 @@ using Bogus;
 namespace TestingDataFactory.Core.Generation;
 
 /// <summary>Поддерживаемые имена генераторов и локали библиотеки Bogus.</summary>
-public static class SemanticGeneratorCatalog
+internal static class SemanticGeneratorCatalog
 {
     private static readonly HashSet<string> Names = new(StringComparer.Ordinal)
     {

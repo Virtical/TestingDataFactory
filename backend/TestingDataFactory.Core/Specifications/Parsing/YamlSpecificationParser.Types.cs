@@ -6,7 +6,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private Dictionary<string, TypeDefinition> ReadTypes(YamlMappingNode? mapping, List<SpecificationDiagnostic> errors)
     {

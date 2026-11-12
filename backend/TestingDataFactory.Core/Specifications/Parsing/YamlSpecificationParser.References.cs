@@ -5,10 +5,11 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private static FieldDefinition? ReadReferenceField(YamlMappingNode field, string path, List<SpecificationDiagnostic> errors)
     {
+        CheckKeys(field, ["ref", "per_parent", "primary", "unique", "pii", "null_rate", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "locale", "distribution"], path, errors);
         var refNode = Get(field, "ref")!;
         var text = refNode is YamlScalarNode scalar && IsString(scalar) ? scalar.Value : null;
         var parts = text?.Split('.');
@@ -41,8 +42,8 @@ public sealed partial class YamlSpecificationParser
     }
 
     private static (Dictionary<string, TableDefinition> Tables, IReadOnlyList<string> Order) ResolveReferences(
-        Dictionary<string, TableDefinition> tables,
-        Dictionary<(string Table, string Field), YamlMappingNode> locations,
+        IReadOnlyDictionary<string, TableDefinition> tables,
+        IReadOnlyDictionary<(string Table, string Field), YamlMappingNode> locations,
         IReadOnlyDictionary<string, TypeDefinition> types,
         List<SpecificationDiagnostic> errors, string defaultLocale)
     {

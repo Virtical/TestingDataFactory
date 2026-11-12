@@ -6,7 +6,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private static readonly Regex IsoTime = new(
         @"\A(?<time>[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,7})?)?)(?<offset>Z|[+-][0-9]{2}:[0-9]{2})?\z",

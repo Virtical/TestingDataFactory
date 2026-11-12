@@ -1,6 +1,6 @@
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
-public enum SpecificationParsePurpose
+internal enum SpecificationParsePurpose
 {
     Generation,
     DataValidation

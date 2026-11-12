@@ -10,7 +10,7 @@ using YamlDotNet.RepresentationModel;
 namespace TestingDataFactory.Core.Specifications.Parsing;
 
 /// <summary>Разбирает таблицы и собственные типы спецификации.</summary>
-public sealed partial class YamlSpecificationParser
+internal sealed partial class YamlSpecificationParser
 {
     private readonly ISpecificationDictionaryRegistry dictionaryRegistry;
 
@@ -26,6 +26,26 @@ public sealed partial class YamlSpecificationParser
     };
 
     public SpecificationParseResult Parse(string yaml, SpecificationParsePurpose purpose = SpecificationParsePurpose.Generation)
+    {
+        var preparation = Prepare(yaml, purpose);
+        if (preparation.Specification is not { } prepared) return new(null, preparation.Diagnostics);
+        return Finish(prepared, preparation.Diagnostics, purpose);
+    }
+
+    internal SpecificationParseResult Finish(PreparedSpecification prepared, IReadOnlyList<SpecificationDiagnostic> diagnostics,
+        SpecificationParsePurpose purpose = SpecificationParsePurpose.Generation, bool validateGenerationReferences = true)
+    {
+        var errors = new List<SpecificationDiagnostic>(diagnostics);
+        var (resolvedTables, tableOrder) = ResolveReferences(prepared.Tables, prepared.ReferenceNodes, prepared.Types, errors, prepared.Structure.Locale);
+        CheckTableExpressions(prepared.Tables, resolvedTables, prepared.TableNodes, errors);
+        var generation = purpose == SpecificationParsePurpose.DataValidation ? null : ReadGeneration(prepared.GenerationNode, resolvedTables, errors, validateGenerationReferences);
+        return errors.Count == 0
+            ? new(new Specification(prepared.Structure.Version, prepared.Structure.Locale, prepared.Types,
+                new ReadOnlyDictionary<string, TableDefinition>(resolvedTables), tableOrder, generation), errors.AsReadOnly())
+            : new(null, errors.AsReadOnly());
+    }
+
+    internal PreparationResult Prepare(string yaml, SpecificationParsePurpose purpose = SpecificationParsePurpose.Generation)
     {
         ArgumentNullException.ThrowIfNull(yaml);
         if (!Enum.IsDefined(purpose)) throw new ArgumentOutOfRangeException(nameof(purpose));
@@ -62,13 +82,11 @@ public sealed partial class YamlSpecificationParser
                 if (name is not null && table is not null) parsedTables.Add(name, table);
             }
 
-            var (resolvedTables, tableOrder) = ResolveReferences(parsedTables, references, types, errors, defaultLocale);
-            CheckTableExpressions(parsedTables, resolvedTables, tables, errors);
-            var generation = validationOnly ? null : ReadGeneration(Get(root, "generation"), resolvedTables, errors);
-            return errors.Count == 0
-                ? new(new Specification(structure.Structure!.Version, structure.Structure.Locale, new ReadOnlyDictionary<string, TypeDefinition>(types),
-                    new ReadOnlyDictionary<string, TableDefinition>(resolvedTables), tableOrder, generation), errors.AsReadOnly())
-                : new(null, errors.AsReadOnly());
+            var prepared = new PreparedSpecification(structure.Structure!, new ReadOnlyDictionary<string, TypeDefinition>(types),
+                new ReadOnlyDictionary<string, TableDefinition>(parsedTables),
+                new ReadOnlyDictionary<(string Table, string Field), YamlMappingNode>(references), tables,
+                validationOnly ? null : Get(root, "generation"));
+            return new(prepared, errors.AsReadOnly());
         }
         catch (YamlException ex)
         {
