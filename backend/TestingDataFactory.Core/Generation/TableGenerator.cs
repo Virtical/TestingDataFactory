@@ -48,16 +48,16 @@ internal static class TableGenerator
             {
                 var path = tablePath + ".fields['" + fieldName.Replace("'", "\\'") + "']";
                 var enumValues = field.Type == FieldType.Enum ? BuiltInEnumValues.Resolve(specification, field) : null;
-                if (field.Reference is not null) continue;
-                if (field.Derived is not null)
+                if (field.ValueSource is FieldReference) continue;
+                if (field.ValueSource is FieldValueSource.Derived derived)
                 {
                     if (field.Type is not (FieldType.Integer or FieldType.Decimal or FieldType.Boolean or FieldType.String) ||
-                        field.Scale is > 28 || !DerivedValueGenerator.Supports(field.Derived.Source))
+                        field.Scale is > 28 || !DerivedValueGenerator.Supports(derived.Expression.Source))
                         errors.Add(new("UNSUPPORTED_DERIVED", "Выражение или тип derived пока не поддерживается генератором.", path + ".derived"));
                     continue;
                 }
                 if ((field.Type == FieldType.Enum && enumValues is null) ||
-                    (field.Generator is null && field.Type is not (FieldType.Integer or FieldType.Decimal or FieldType.Boolean or FieldType.Uuid or FieldType.Date or FieldType.DateTime or FieldType.Time or FieldType.Enum)))
+                    (field.ValueSource is not FieldValueSource.Generator && field.Type is not (FieldType.Integer or FieldType.Decimal or FieldType.Boolean or FieldType.Uuid or FieldType.Date or FieldType.DateTime or FieldType.Time or FieldType.Enum)))
                 {
                     errors.Add(new("UNSUPPORTED_GENERATION_FIELD", "Тип поля или способ задания значения пока не поддерживается.", path));
                     continue;
@@ -102,7 +102,7 @@ internal static class TableGenerator
         foreach (var tableName in specification.TableOrder)
         {
             var table = specification.Tables[tableName];
-            var fields = table.Fields.Where(p => p.Value.Reference is null && p.Value.Derived is null)
+            var fields = table.Fields.Where(p => p.Value.ValueSource is FieldValueSource.ByType or FieldValueSource.Generator)
                 .ToDictionary(p => p.Key, p => new FieldGenerator(p.Value, random, p.Key, specification), StringComparer.Ordinal);
             var derived = OrderDerived(table).Select(name => (Name: name, Generator: new DerivedValueGenerator(table.Fields[name], table.Fields))).ToArray();
             var reference = table.Fields.FirstOrDefault(p => p.Value.Reference is not null);
@@ -180,7 +180,7 @@ internal static class TableGenerator
             this.field = field;
             this.random = random;
             this.name = name;
-            if (field.Generator is not null) semantic = new SemanticValueGenerator(field, random.Next());
+            if (field.ValueSource is FieldValueSource.Generator) semantic = new SemanticValueGenerator(field, random.Next());
             if (field.Type == FieldType.Enum) enumGenerator = new EnumValueGenerator(BuiltInEnumValues.Resolve(specification, field)!, field.Unique, random);
             if (field.Distribution is NormalDistribution) normal = new NormalValueGenerator(field, random);
             if (field.Distribution is LogNormalDistribution) lognormal = new LogNormalValueGenerator(field, random);

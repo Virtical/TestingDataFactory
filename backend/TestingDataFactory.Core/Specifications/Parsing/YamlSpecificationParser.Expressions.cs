@@ -113,7 +113,8 @@ internal sealed partial class YamlSpecificationParser
             if (node is null) continue;
             var expression = ReadExpression(node, fields.Keys, ChildPath(tablePath + ".fields", name) + ".derived", errors,
                 expectedType: unavailable.Contains(name) ? null : field.Type, variableTypes: fieldTypes, fields: fields, unavailable: unavailable);
-            if (expression is not null && fields.TryGetValue(name, out var resolvedField)) fields[name] = resolvedField with { Derived = expression };
+            if (expression is not null && fields.TryGetValue(name, out var resolvedField))
+                fields[name] = resolvedField with { ValueSource = new FieldValueSource.Derived(expression) };
         }
 
         // A malformed type may prevent the field from being constructed at all. Its

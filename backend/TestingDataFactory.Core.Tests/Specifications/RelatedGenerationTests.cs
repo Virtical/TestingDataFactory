@@ -94,6 +94,31 @@ public class RelatedGenerationTests
     }
 
     [Test]
+    public void GeneratesReferenceToDerivedDecimalUsingTheCalculatedValue()
+    {
+        var parsed = parser.Parse("""
+            spec_version: '1.0'
+            tables:
+              child: { fields: { amount: { ref: parent.amount } } }
+              parent: { fields: { amount: { type: decimal, scale: 2, derived: '10.0 / 3.0' } } }
+            generation: { rows: { parent: 1 } }
+            """);
+        Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
+        var validation = parser.Validate(parsed.Specification!);
+        Assert.That(validation.IsSuccess, Is.True, string.Join("; ", validation.Diagnostics));
+        var tables = validation.Specification!.Tables;
+        Assert.That(tables["parent"].Fields["amount"].Type, Is.EqualTo(FieldType.Decimal));
+        Assert.That(tables["parent"].Fields["amount"].ValueSource, Is.TypeOf<FieldValueSource.Derived>());
+        Assert.That(tables["child"].Fields["amount"].Type, Is.EqualTo(FieldType.Decimal));
+        Assert.That(tables["child"].Fields["amount"].ValueSource, Is.EqualTo(new FieldReference("parent", "amount", null)));
+
+        var generated = parser.Generate(parsed.Specification!);
+        Assert.That(generated.IsSuccess, Is.True, string.Join("; ", generated.Diagnostics));
+        Assert.That(generated.Rows!.Select(row => (row.Table, row.Values["amount"])),
+            Is.EqualTo(new (string, object?)[] { ("parent", 3.33m), ("child", 3.33m) }));
+    }
+
+    [Test]
     public void ReturnsErrorForMultipleParentsBeforeStreaming()
     {
         var parsed = parser.Parse("spec_version: '1.0'\ntables: { a: { fields: { id: { type: integer } } }, b: { fields: { id: { type: integer } } }, c: { fields: { a: { ref: a.id }, b: { ref: b.id } } } }");

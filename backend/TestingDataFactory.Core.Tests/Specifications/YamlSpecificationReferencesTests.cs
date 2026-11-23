@@ -106,6 +106,8 @@ public class YamlSpecificationReferencesTests
     [TestCase("{ ref: parent.id.extra }", "INVALID_REFERENCE")]
     [TestCase("{ ref: '' }", "INVALID_REFERENCE")]
     [TestCase("{ ref: 23 }", "INVALID_REFERENCE")]
+    [TestCase("{ ref: parent.id, generator: person.full_name }", "UNSUPPORTED_PARAMETER")]
+    [TestCase("{ ref: parent.id, derived: '1' }", "UNSUPPORTED_PARAMETER")]
     [TestCase("{ ref: parent.id, type: integer }", "UNSUPPORTED_PARAMETER")]
     [TestCase("{ ref: parent.id, per_parent: [] }", "INVALID_PER_PARENT")]
     [TestCase("{ ref: parent.id, per_parent: { min: 0 } }", "MISSING_PER_PARENT_BOUND")]
@@ -120,6 +122,13 @@ public class YamlSpecificationReferencesTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Specification, Is.Null);
         Assert.That(result.Diagnostics.Select(d => d.Code), Does.Contain(code));
+    }
+
+    [TestCase("", "id")]
+    [TestCase("parent", " ")]
+    public void ReferenceRequiresBothPartsOfTheTarget(string table, string field)
+    {
+        Assert.Throws<ArgumentException>(() => new FieldReference(table, field, null));
     }
 
     [TestCase("tables: { a: { fields: { id: { ref: a.id } } } }")]

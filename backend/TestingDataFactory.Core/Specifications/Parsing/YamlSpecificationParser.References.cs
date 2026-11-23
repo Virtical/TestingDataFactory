@@ -37,8 +37,9 @@ internal sealed partial class YamlSpecificationParser
             }
         }
 
-        return new(FieldType.Reference, false, false, false, null, null, null, null, null, null, null, null,
-            Reference: new FieldReference(parts[0], parts[1], perParent));
+        // Тип результата станет известен после разрешения ссылки.
+        return new(FieldType.Dynamic, new FieldReference(parts[0], parts[1], perParent),
+            false, false, false, null, null, null, null, null, null, null, null);
     }
 
     private static (Dictionary<string, TableDefinition> Tables, IReadOnlyList<string> Order) ResolveReferences(
@@ -96,11 +97,12 @@ internal sealed partial class YamlSpecificationParser
                     if (!resolved.TryGetValue(reference.Table, out var targetTable) || !targetTable.Fields.TryGetValue(reference.Field, out var target)) continue;
                     var path = ChildPath(ChildPath("$.tables", name) + ".fields", fieldName);
                     var source = locations[(name, fieldName)];
-                    var checkedField = ReadField(source, path, errors, typeName => types.GetValueOrDefault(typeName), referencedType: target);
+                    var checkedField = ReadField(source, path, errors, typeName => types.GetValueOrDefault(typeName),
+                        resolvedReference: (target, reference));
                     if (checkedField is not null)
                     {
                         CheckReferenceCompatibility(checkedField, target, path, source, errors);
-                        fields.Add(fieldName, ApplyLocale(checkedField with { Reference = reference }, defaultLocale));
+                        fields.Add(fieldName, ApplyLocale(checkedField, defaultLocale));
                     }
                 }
                 else fields.Add(fieldName, field);

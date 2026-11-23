@@ -135,13 +135,15 @@ internal sealed partial class YamlSpecificationParser
         return name is null ? null : new(name, new ReadOnlyDictionary<string, FieldDefinition>(result), Array.Empty<RuleDefinition>());
     }
 
-    private static FieldDefinition? ReadField(YamlNode node, string path, List<SpecificationDiagnostic> errors, Func<string, TypeDefinition?> resolve, bool isType = false, FieldDefinition? referencedType = null)
+    private static FieldDefinition? ReadField(YamlNode node, string path, List<SpecificationDiagnostic> errors,
+        Func<string, TypeDefinition?> resolve, bool isType = false, (FieldDefinition Target, FieldReference Source)? resolvedReference = null)
     {
         if (node is not YamlMappingNode field)
         {
             Error(errors, "FIELD_NOT_MAPPING", "Поле должно быть объектом.", path, node);
             return null;
         }
+        var referencedType = resolvedReference?.Target;
         var generatorNode = referencedType is null && !isType ? Get(field, "generator") : null;
         var derivedNode = referencedType is null && !isType && generatorNode is null ? Get(field, "derived") : null;
         CheckKeys(field, referencedType is not null
@@ -250,9 +252,14 @@ internal sealed partial class YamlSpecificationParser
             Error(errors, "INVALID_INTEGER_RANGE", "Границы integer должны быть целыми числами.", path, node);
 
         var derivedSource = derivedNode is null ? null : Name(derivedNode, path + ".derived", errors);
-        return new(type, primary, primary || unique, pii, nullRate, min, max, scale, minLength, maxLength, pattern, trueRate,
-            named is null ? null : typeName, column, TemporalMin: temporalMin, TemporalMax: temporalMax, Generator: generator, Locale: locale,
-            Derived: derivedSource is null ? null : new CelExpression(derivedSource, Array.Empty<string>()), Distribution: distribution,
+        FieldValueSource valueSource;
+        if (resolvedReference is { } reference) valueSource = reference.Source;
+        else if (generator is not null) valueSource = new FieldValueSource.Generator(generator);
+        else if (derivedSource is not null) valueSource = new FieldValueSource.Derived(new CelExpression(derivedSource, Array.Empty<string>()));
+        else valueSource = new FieldValueSource.ByType();
+        return new(type, valueSource, primary, primary || unique, pii, nullRate, min, max, scale, minLength, maxLength, pattern, trueRate,
+            named is null ? null : typeName, column, TemporalMin: temporalMin, TemporalMax: temporalMax, Locale: locale,
+            Distribution: distribution,
             Fields: nestedFields, Items: items, MinItems: minItems, MaxItems: maxItems);
     }
 

@@ -65,7 +65,7 @@ public sealed class SpecificationParser
             foreach (var (fieldName, field) in table.Fields)
             {
                 if (!field.Unique || field.Type != FieldType.Integer || field.Min is not { } min || field.Max is not { } max ||
-                    field.NullRate is > 0 || field.Derived is not null || field.Reference is not null) continue;
+                    field.NullRate is > 0 || field.ValueSource is not FieldValueSource.ByType) continue;
                 // Avoid overflowing decimal when the interval reaches the numeric limit.
                 var insufficient = min > decimal.MaxValue - (count - 1) || min + (count - 1) > max;
                 if (insufficient)

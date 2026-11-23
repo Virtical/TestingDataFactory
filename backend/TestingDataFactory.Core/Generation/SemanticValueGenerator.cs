@@ -15,7 +15,7 @@ internal sealed class SemanticValueGenerator
     public SemanticValueGenerator(FieldDefinition field, int seed)
     {
         ArgumentNullException.ThrowIfNull(field);
-        if (field.Generator is null || !SemanticGeneratorCatalog.TryGetGenerator(field.Generator, out var generate))
+        if (field.ValueSource is not FieldValueSource.Generator generator || !SemanticGeneratorCatalog.TryGetGenerator(generator.Name, out var generate))
             throw new ArgumentException("Поле должно содержать поддерживаемый генератор.", nameof(field));
         if (field.Locale is null || !SemanticGeneratorCatalog.TryResolveLocale(field.Locale, out var locale))
             throw new ArgumentException("Поле должно содержать поддерживаемую локаль.", nameof(field));

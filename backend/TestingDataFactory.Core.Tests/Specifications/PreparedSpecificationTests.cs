@@ -29,8 +29,8 @@ public class PreparedSpecificationTests
         var prepared = preparation.Specification!;
         Assert.That(prepared.Tables.Keys, Is.EquivalentTo(new[] { "first", "second" }));
         var field = prepared.Tables["first"].Fields["second_id"];
-        Assert.That(field.Type, Is.EqualTo(FieldType.Reference));
-        Assert.That(field.Reference, Is.EqualTo(new FieldReference("second", "id", new PerParentRange(1, 2))));
+        Assert.That(field.Type, Is.EqualTo(FieldType.Dynamic));
+        Assert.That(field.ValueSource, Is.EqualTo(new FieldReference("second", "id", new PerParentRange(1, 2))));
         Assert.That(prepared.Tables["second"].Fields["first_id"].Reference!.Table, Is.EqualTo("first"));
         Assert.That(prepared.ReferenceNodes[("first", "second_id")].Start.Line, Is.GreaterThan(0));
         Assert.That(parser.Parse(yaml).Diagnostics.Select(d => d.Code), Does.Contain("REFERENCE_CYCLE"));
