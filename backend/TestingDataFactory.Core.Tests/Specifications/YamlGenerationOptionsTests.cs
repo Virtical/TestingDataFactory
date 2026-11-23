@@ -65,6 +65,27 @@ public class YamlGenerationOptionsTests
         Assert.That(parser.Parse("spec_version: '1.0'\n" + Tables).Specification!.Generation, Is.Null);
     }
 
+    [Test]
+    public void GenerationOptionsKeepASnapshotOfRowCounts()
+    {
+        var counts = new Dictionary<string, int> { ["customers"] = 0 };
+        var options = new GenerationOptions(null, counts, GenerationMode.Valid, null);
+
+        counts["customers"] = -1;
+        counts["orders"] = 5;
+
+        Assert.That(options.Rows["customers"], Is.Zero);
+        Assert.That(options.Rows.ContainsKey("orders"), Is.False);
+    }
+
+    [Test]
+    public void RowCountsRejectNegativeValuesAtConstruction()
+    {
+        var counts = new Dictionary<string, int> { ["customers"] = -1 };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RowCounts(counts));
+    }
+
     [TestCase("{ output: { json: {} }, mode: anomalies }", typeof(JsonOutput))]
     [TestCase("{ output: { csv: { delimiter: ';' } } }", typeof(CsvOutput))]
     [TestCase("{ output: { sql: { dialect: sqlite, style: insert } } }", typeof(SqlOutput))]

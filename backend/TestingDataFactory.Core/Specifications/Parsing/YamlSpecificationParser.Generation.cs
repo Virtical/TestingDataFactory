@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Globalization;
 using TestingDataFactory.Core.Specifications.Diagnostics;
 using TestingDataFactory.Core.Specifications.Model;
@@ -51,14 +50,13 @@ internal sealed partial class YamlSpecificationParser
             }
         }
         var output = ReadOutput(Get(generation, "output"), path + ".output", errors);
-        var options = new GenerationOptions(seed, new ReadOnlyDictionary<string, int>(rows), mode, output);
-        foreach (var diagnostic in validateReferences ? GenerationOptionsMerger.Validate(options, tables) : [])
+        foreach (var diagnostic in validateReferences ? GenerationOptionsMerger.Validate(mode, rows, output, tables) : [])
         {
             if (locations.TryGetValue(diagnostic.Path, out var source))
                 errors.Add(diagnostic with { Line = source.Start.Line, Column = source.Start.Column });
             else errors.Add(diagnostic);
         }
-        return options;
+        return new GenerationOptions(seed, rows, mode, output);
     }
 
     private static int? ReadInt(YamlNode? node, string path, List<SpecificationDiagnostic> errors, string code, bool allowNegative)
@@ -66,7 +64,7 @@ internal sealed partial class YamlSpecificationParser
         if (node is null) return null;
         if (node is YamlScalarNode scalar && scalar.Style == ScalarStyle.Plain &&
             int.TryParse(scalar.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value) &&
-            (allowNegative || value >= 0)) return value;
+            (allowNegative || RowCounts.IsValidCount(value))) return value;
         Error(errors, code, allowNegative ? "Ожидается целое число в диапазоне Int32." : "Ожидается неотрицательное целое число в диапазоне Int32.", path, node);
         return null;
     }

@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using TestingDataFactory.Core.Specifications.Diagnostics;
 using TestingDataFactory.Core.Specifications.Model;
 
@@ -15,27 +14,30 @@ internal static class GenerationOptionsMerger
         var rows = new Dictionary<string, int>(StringComparer.Ordinal);
         if (original is not null) foreach (var entry in original.Rows) rows[entry.Key] = entry.Value;
         if (overrides.Rows is not null) foreach (var entry in overrides.Rows) rows[entry.Key] = entry.Value;
-        var merged = new GenerationOptions(overrides.Seed ?? original?.Seed,
-            new ReadOnlyDictionary<string, int>(rows), overrides.Mode ?? original?.Mode ?? GenerationMode.Valid,
-            overrides.Output ?? original?.Output);
-        var errors = Validate(merged, specification.Tables);
-        return new(errors.Count == 0 ? merged : null, errors.AsReadOnly());
+        var mode = overrides.Mode ?? original?.Mode ?? GenerationMode.Valid;
+        var output = overrides.Output ?? original?.Output;
+        var errors = Validate(mode, rows, output, specification.Tables);
+        var merged = errors.Count == 0
+            ? new GenerationOptions(overrides.Seed ?? original?.Seed, rows, mode, output)
+            : null;
+        return new(merged, errors.AsReadOnly());
     }
 
-    internal static List<SpecificationDiagnostic> Validate(GenerationOptions options, IReadOnlyDictionary<string, TableDefinition> tables)
+    internal static List<SpecificationDiagnostic> Validate(GenerationMode mode, IReadOnlyDictionary<string, int> rows,
+        GenerationOutput? output, IReadOnlyDictionary<string, TableDefinition> tables)
     {
         var errors = new List<SpecificationDiagnostic>();
-        if (!Enum.IsDefined(options.Mode)) errors.Add(new("INVALID_GENERATION_MODE", "Неизвестный режим генерации.", "$.generation.mode"));
-        foreach (var (name, count) in options.Rows)
+        if (!Enum.IsDefined(mode)) errors.Add(new("INVALID_GENERATION_MODE", "Неизвестный режим генерации.", "$.generation.mode"));
+        foreach (var (name, count) in rows)
         {
             var path = "$.generation.rows['" + name.Replace("'", "\\'") + "']";
-            if (count < 0) errors.Add(new("INVALID_ROW_COUNT", "Число строк должно быть неотрицательным.", path));
+            if (!RowCounts.IsValidCount(count)) errors.Add(new("INVALID_ROW_COUNT", "Число строк должно быть неотрицательным.", path));
             if (!tables.TryGetValue(name, out var table))
                 errors.Add(new("UNKNOWN_ROWS_TABLE", "Таблица не найдена.", path));
             else if (table.Fields.Values.Any(field => field.Reference is not null))
                 errors.Add(new("ROWS_FOR_CHILD_TABLE", "Число строк задаётся только для корневых таблиц.", path));
         }
-        switch (options.Output)
+        switch (output)
         {
             case null or JsonOutput: break;
             case CsvOutput csv when IsValidDelimiter(csv.Delimiter): break;
