@@ -45,7 +45,7 @@ internal sealed partial class YamlSpecificationParser
                     Error(errors, "INVALID_RULE", "Правило должно быть объектом.", rulePath, rules.Children[i]);
                     continue;
                 }
-                CheckKeys(rule, ["expr", "when", "message", "severity"], rulePath, errors);
+                CheckKeys(rule, RuleKeys, rulePath, errors);
                 if (Get(rule, "expr") is null) Error(errors, "MISSING_RULE_EXPRESSION", "Укажите expr.", rulePath + ".expr", rule);
                 foreach (var key in new[] { "expr", "when" })
                 {

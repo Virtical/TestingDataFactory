@@ -147,7 +147,7 @@ internal sealed partial class YamlSpecificationParser
         var generatorNode = referencedType is null && !isType ? Get(field, "generator") : null;
         var derivedNode = referencedType is null && !isType && generatorNode is null ? Get(field, "derived") : null;
         CheckKeys(field, referencedType is not null
-            ? ["ref", "per_parent", "primary", "unique", "pii", "null_rate", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "locale", "distribution"]
+            ? ReferenceFieldKeys
             : generatorNode is not null
             ? ["generator", "primary", "unique", "pii", "null_rate", "min_length", "max_length", "locale", "distribution"]
             : isType

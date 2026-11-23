@@ -7,9 +7,15 @@ namespace TestingDataFactory.Core.Specifications.Parsing;
 
 internal sealed partial class YamlSpecificationParser
 {
+    private static readonly string[] ReferenceFieldKeys =
+    [
+        "ref", "per_parent", "primary", "unique", "pii", "null_rate", "min", "max", "scale",
+        "min_length", "max_length", "pattern", "true_rate", "locale", "distribution"
+    ];
+
     private static FieldDefinition? ReadReferenceField(YamlMappingNode field, string path, List<SpecificationDiagnostic> errors)
     {
-        CheckKeys(field, ["ref", "per_parent", "primary", "unique", "pii", "null_rate", "min", "max", "scale", "min_length", "max_length", "pattern", "true_rate", "locale", "distribution"], path, errors);
+        CheckKeys(field, ReferenceFieldKeys, path, errors);
         var refNode = Get(field, "ref")!;
         var text = refNode is YamlScalarNode scalar && IsString(scalar) ? scalar.Value : null;
         var parts = text?.Split('.');

@@ -7,6 +7,8 @@ namespace TestingDataFactory.Core.Specifications.Parsing;
 
 internal sealed partial class YamlSpecificationParser
 {
+    private static readonly string[] RuleKeys = ["expr", "when", "message", "severity"];
+
     private static void CheckTableExpressions(IReadOnlyDictionary<string, TableDefinition> parsedTables,
         Dictionary<string, TableDefinition> tables, YamlMappingNode tableNodes,
         List<SpecificationDiagnostic> errors)
@@ -77,7 +79,7 @@ internal sealed partial class YamlSpecificationParser
                 Error(errors, "INVALID_RULE", "Правило должно быть объектом.", rulePath, entry);
                 continue;
             }
-            CheckKeys(rule, ["expr", "when", "message", "severity"], rulePath, errors);
+            CheckKeys(rule, RuleKeys, rulePath, errors);
             var exprNode = Get(rule, "expr");
             if (exprNode is null)
             {
