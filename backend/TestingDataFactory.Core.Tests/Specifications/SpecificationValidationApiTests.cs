@@ -40,7 +40,7 @@ public class SpecificationValidationApiTests
         var parsed = parser.Parse(yaml);
         Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
         Assert.That(parser.Validate(parsed.Specification!).IsSuccess, Is.True);
-        var valid = parser.Validate(parsed.Specification!, new GenerationOverrides());
+        var valid = parser.ValidateGenerationOptions(parsed.Specification!);
         Assert.That(valid.IsSuccess, Is.True, string.Join("; ", valid.Diagnostics));
         Assert.That(valid.Options!.Seed, Is.EqualTo(42));
         Assert.That(valid.Options.Rows["t"], Is.EqualTo(2));
@@ -86,6 +86,31 @@ public class SpecificationValidationApiTests
         var parsed = parser.Parse("spec_version: '1.0'\ntables: { parent: { fields: { id: { type: integer } } }, child: { fields: { id: { ref: parent.id } } } }");
         var result = parser.Validate(parsed.Specification!, new GenerationOverrides(Rows: new Dictionary<string, int> { ["child"] = 1, ["missing"] = 1 }));
         Assert.That(result.Diagnostics.Select(d => d.Code), Is.EquivalentTo(new[] { "ROWS_FOR_CHILD_TABLE", "UNKNOWN_ROWS_TABLE" }));
+    }
+
+    [Test]
+    public void GenerationOptionValidationReportsInvalidYamlRowTargetsWithSourcePositions()
+    {
+        var parsed = parser.Parse("""
+            spec_version: '1.0'
+            tables:
+              parent: { fields: { id: { type: integer } } }
+              child: { fields: { id: { ref: parent.id } } }
+            generation:
+              rows:
+                missing: 1
+                child: 2
+            """);
+        Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
+
+        var result = parser.ValidateGenerationOptions(parsed.Specification!);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.Diagnostics.Select(d => (d.Code, d.Path, d.Line)), Is.EquivalentTo(new (string, string, int?)[]
+        {
+            ("UNKNOWN_ROWS_TABLE", "$.generation.rows['missing']", 7),
+            ("ROWS_FOR_CHILD_TABLE", "$.generation.rows['child']", 8)
+        }));
+        Assert.That(parser.ValidateGeneration(parsed.Specification!).Diagnostics, Is.EqualTo(result.Diagnostics));
     }
 
     [Test]

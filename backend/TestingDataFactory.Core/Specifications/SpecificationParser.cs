@@ -21,25 +21,39 @@ public sealed class SpecificationParser
     public ParseResult Parse(string yaml) => parser.ParseForValidation(yaml);
 
     /// <summary>Проверяет связи и правила; при наличии переопределений проверяет параметры запуска.</summary>
-    public ValidationResult Validate(ParsedSpecification specification, GenerationOverrides? overrides = null)
+    public ValidationResult Validate(ParsedSpecification specification, GenerationOverrides? overrides = null) =>
+        ValidateCore(specification, overrides, validateGenerationOptions: overrides is not null);
+
+    /// <summary>Проверяет связи, правила и параметры запуска из YAML с учётом переданных переопределений.</summary>
+    public ValidationResult ValidateGenerationOptions(ParsedSpecification specification, GenerationOverrides? overrides = null) =>
+        ValidateCore(specification, overrides, validateGenerationOptions: true);
+
+    private ValidationResult ValidateCore(ParsedSpecification specification, GenerationOverrides? overrides, bool validateGenerationOptions)
     {
         ArgumentNullException.ThrowIfNull(specification);
-        var result = parser.Finish(specification.Prepared, Array.Empty<SpecificationDiagnostic>(), validateGenerationReferences: false);
+        var result = parser.Finish(specification.Prepared, Array.Empty<SpecificationDiagnostic>(),
+            validateGenerationReferences: validateGenerationOptions && overrides is null);
         if (!result.IsSuccess) return new(null, null, result.Diagnostics);
-        if (overrides is null) return new(result.Specification, null, Array.Empty<SpecificationDiagnostic>());
+        if (!validateGenerationOptions) return new(result.Specification, null, Array.Empty<SpecificationDiagnostic>());
 
-        var merged = GenerationOptionsMerger.Apply(result.Specification!, overrides);
-        if (!merged.IsSuccess) return new(null, null, merged.Diagnostics);
-        var errors = ValidateUniqueCapacity(result.Specification!, merged.Options!);
+        var resolved = result.Specification!;
+        var options = resolved.Generation;
+        if (overrides is not null || options is null)
+        {
+            var merged = GenerationOptionsMerger.Apply(resolved, overrides ?? new GenerationOverrides());
+            if (!merged.IsSuccess) return new(null, null, merged.Diagnostics);
+            options = merged.Options!;
+        }
+        var errors = ValidateUniqueCapacity(resolved, options);
         return errors.Count == 0
-            ? new(result.Specification, merged.Options, errors.AsReadOnly())
+            ? new(resolved, options, errors.AsReadOnly())
             : new(null, null, errors.AsReadOnly());
     }
 
     /// <summary>Проверяет спецификацию и параметры запуска на совместимость с генератором без создания строк.</summary>
     public ValidationResult ValidateGeneration(ParsedSpecification specification, GenerationOverrides? overrides = null)
     {
-        var validation = Validate(specification, overrides ?? new GenerationOverrides());
+        var validation = ValidateGenerationOptions(specification, overrides);
         if (!validation.IsSuccess) return validation;
         var errors = TableGenerator.Check(validation.Specification!, validation.Options!);
         return errors.Count == 0 ? validation : new(null, null, errors.AsReadOnly());
