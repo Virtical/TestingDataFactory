@@ -114,7 +114,7 @@ internal sealed partial class YamlSpecificationParser
             var node = fieldNode is null ? null : Get(fieldNode, "derived");
             if (node is null) continue;
             var expression = ReadExpression(node, fields.Keys, ChildPath(tablePath + ".fields", name) + ".derived", errors,
-                expectedType: unavailable.Contains(name) ? null : field.Type, variableTypes: fieldTypes, fields: fields, unavailable: unavailable);
+                expectedField: unavailable.Contains(name) ? null : field, variableTypes: fieldTypes, fields: fields, unavailable: unavailable);
             if (expression is not null && fields.TryGetValue(name, out var resolvedField))
                 fields[name] = resolvedField with { ValueSource = new FieldValueSource.Derived(expression) };
         }
@@ -150,14 +150,14 @@ internal sealed partial class YamlSpecificationParser
     }
 
     private static CelExpression? ReadExpression(YamlNode node, IEnumerable<string> variables, string path,
-        List<SpecificationDiagnostic> errors, bool booleanResult = false, FieldType? expectedType = null,
+        List<SpecificationDiagnostic> errors, bool booleanResult = false, FieldDefinition? expectedField = null,
         IReadOnlyDictionary<string, FieldType>? variableTypes = null, IReadOnlyDictionary<string, FieldDefinition>? fields = null,
         IReadOnlySet<string>? unavailable = null)
     {
         var source = Name(node, path, errors);
         if (source is null) return null;
         if (unavailable is { Count: > 0 } && CelExpressionValidator.ReferencesAny(source, unavailable)) return null;
-        var (expression, error) = CelExpressionValidator.Validate(source, variables, booleanResult, expectedType, variableTypes, fields);
+        var (expression, error) = CelExpressionValidator.Validate(source, variables, booleanResult, expectedField, variableTypes, fields);
         if (error is not null) Error(errors, "INVALID_CEL", error, path, node);
         return expression;
     }

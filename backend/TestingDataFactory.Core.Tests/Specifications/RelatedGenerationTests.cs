@@ -118,6 +118,26 @@ public class RelatedGenerationTests
             Is.EqualTo(new (string, object?)[] { ("parent", 3.33m), ("child", 3.33m) }));
     }
 
+    [TestCase(0, 7)]
+    [TestCase(1, null)]
+    public void GeneratesNullableDerivedBranches(int trueRate, int? expected)
+    {
+        var parsed = parser.Parse($$"""
+            spec_version: '1.0'
+            tables:
+              t:
+                fields:
+                  flag: { type: boolean, true_rate: {{trueRate}} }
+                  value: { type: integer, null_rate: 0.1, derived: 'flag ? null : 7' }
+            generation: { rows: { t: 1 } }
+            """);
+        Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
+
+        var result = parser.Generate(parsed.Specification!);
+        Assert.That(result.IsSuccess, Is.True, string.Join("; ", result.Diagnostics));
+        Assert.That((decimal?)result.Rows!.Single().Values["value"], Is.EqualTo((decimal?)expected));
+    }
+
     [Test]
     public void ReturnsErrorForMultipleParentsBeforeStreaming()
     {

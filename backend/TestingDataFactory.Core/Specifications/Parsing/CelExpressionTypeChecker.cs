@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Google.Api.Expr.V1Alpha1;
 using TestingDataFactory.Core.Specifications.Model;
 
@@ -8,36 +9,46 @@ namespace TestingDataFactory.Core.Specifications.Parsing;
 internal static class CelExpressionTypeChecker
 {
     private enum Kind { Unknown, Null, Boolean, Integer, Decimal, String, Date, DateTime, Time, Object, Array, List }
-    private readonly record struct Value(Kind Kind, FieldDefinition? Field = null);
+    private readonly record struct Value(Kind Kind, FieldDefinition? Field = null, bool MayBeNull = false)
+    {
+        public bool CanReturnNull => Kind == Kind.Null || MayBeNull;
+    }
 
     public static string? Validate(Expr expr, IReadOnlyDictionary<string, FieldType>? types,
-        IReadOnlyDictionary<string, FieldDefinition>? fields, bool booleanResult, FieldType? expectedType)
+        IReadOnlyDictionary<string, FieldDefinition>? fields, bool booleanResult, FieldDefinition? expectedField)
     {
-        var (value, error) = Infer(expr, types, fields);
+        var (value, error) = Infer(expr, types, fields, ImmutableHashSet<string>.Empty);
         if (error is not null) return error;
         if (booleanResult && !Is(value.Kind, Kind.Boolean)) return "Выражение правила должно возвращать логическое значение.";
-        if (expectedType is not null && !Assignable(ToKind(expectedType.Value), value.Kind))
-            return "Тип результата выражения несовместим с типом поля.";
+        if (expectedField is not null)
+        {
+            if (!Assignable(ToKind(expectedField.Type), value.Kind))
+                return "Тип результата выражения несовместим с типом поля.";
+            if (value.CanReturnNull && !expectedField.AllowsNull)
+                return "Результат derived может быть NULL. Для такого поля укажите null_rate больше 0.";
+        }
         return null;
     }
 
     private static (Value Value, string? Error) Infer(Expr expr, IReadOnlyDictionary<string, FieldType>? types,
-        IReadOnlyDictionary<string, FieldDefinition>? fields)
+        IReadOnlyDictionary<string, FieldDefinition>? fields, ImmutableHashSet<string> nonNullFields)
     {
         switch (expr.ExprKindCase)
         {
             case Expr.ExprKindOneofCase.IdentExpr:
                 var name = expr.IdentExpr.Name;
-                if (fields is not null && fields.TryGetValue(name, out var field)) return (new(ToKind(field.Type), field), null);
+                if (fields is not null && fields.TryGetValue(name, out var field))
+                    return (new(ToKind(field.Type), field, field.AllowsNull && !nonNullFields.Contains(name)), null);
                 return (new(types is not null && types.TryGetValue(name, out var type) ? ToKind(type) : Kind.Unknown), null);
             case Expr.ExprKindOneofCase.SelectExpr:
-                var (parent, parentError) = Infer(expr.SelectExpr.Operand, types, fields);
+                var (parent, parentError) = Infer(expr.SelectExpr.Operand, types, fields, nonNullFields);
                 if (parentError is not null) return (default, parentError);
                 if (parent.Kind != Kind.Object || parent.Field?.Fields is null)
                     return (default, "Обращение к вложенному полю допустимо только для объекта с известной структурой.");
                 if (!parent.Field.Fields.TryGetValue(expr.SelectExpr.Field, out var child))
                     return (default, "Неизвестное вложенное поле: " + expr.SelectExpr.Field);
-                return (new(ToKind(child.Type), child), null);
+                return (new(ToKind(child.Type), child, child.AllowsNull &&
+                    (nonNullFields.IsEmpty || FieldPath(expr) is not { } path || !nonNullFields.Contains(path))), null);
             case Expr.ExprKindOneofCase.ConstExpr:
                 var c = expr.ConstExpr;
                 return (new(c.HasNullValue ? Kind.Null : c.HasBoolValue ? Kind.Boolean : c.HasInt64Value ? Kind.Integer :
@@ -45,25 +56,28 @@ internal static class CelExpressionTypeChecker
             case Expr.ExprKindOneofCase.ListExpr:
                 return (new(Kind.List), null);
             case Expr.ExprKindOneofCase.CallExpr:
-                return InferCall(expr.CallExpr, types, fields);
+                return InferCall(expr.CallExpr, types, fields, nonNullFields);
             default:
                 return (new(Kind.Unknown), null);
         }
     }
 
     private static (Value Value, string? Error) InferCall(Expr.Types.Call call,
-        IReadOnlyDictionary<string, FieldType>? types, IReadOnlyDictionary<string, FieldDefinition>? fields)
+        IReadOnlyDictionary<string, FieldType>? types, IReadOnlyDictionary<string, FieldDefinition>? fields,
+        ImmutableHashSet<string> nonNullFields)
     {
         var args = new List<Value>();
         if (call.Target is not null)
         {
-            var (target, error) = Infer(call.Target, types, fields);
+            var (target, error) = Infer(call.Target, types, fields, nonNullFields);
             if (error is not null) return (default, error);
             args.Add(target);
         }
-        foreach (var arg in call.Args)
+        var guard = call.Function == "_?_:_" && call.Args.Count == 3 ? NonNullBranch(call.Args[0]) : null;
+        for (var i = 0; i < call.Args.Count; i++)
         {
-            var (value, error) = Infer(arg, types, fields);
+            var branchFields = guard is { } match && match.Branch == i ? nonNullFields.Add(match.Path) : nonNullFields;
+            var (value, error) = Infer(call.Args[i], types, fields, branchFields);
             if (error is not null) return (default, error);
             args.Add(value);
         }
@@ -72,6 +86,7 @@ internal static class CelExpressionTypeChecker
         var function = call.Function;
         var valid = true;
         var result = Kind.Unknown;
+        var mayBeNull = false;
         switch (function)
         {
             case "_&&_": case "_||_":
@@ -81,7 +96,11 @@ internal static class CelExpressionTypeChecker
             case "_?_:_":
                 var other = args.Count > 2 ? args[2].Kind : Kind.Unknown;
                 valid = Is(a, Kind.Boolean) && Compatible(b, other);
-                result = Merge(b, other); break;
+                result = Merge(b, other);
+                if (call.Args[0].ConstExpr is { HasBoolValue: true } condition)
+                    mayBeNull = args[condition.BoolValue ? 1 : 2].CanReturnNull;
+                else mayBeNull = args[1].CanReturnNull || args[2].CanReturnNull;
+                break;
             case "_==_": case "_!=_":
                 valid = Compatible(a, b); result = Kind.Boolean; break;
             case "_<_": case "_<=_": case "_>_": case "_>=_":
@@ -101,7 +120,7 @@ internal static class CelExpressionTypeChecker
                 if (call.Args.Count == 2 && call.Args[1].ExprKindCase == Expr.ExprKindOneofCase.ListExpr)
                     foreach (var item in call.Args[1].ListExpr.Elements)
                     {
-                        var (itemValue, error) = Infer(item, types, fields);
+                        var (itemValue, error) = Infer(item, types, fields, nonNullFields);
                         if (error is not null) return (default, error);
                         valid &= Compatible(a, itemValue.Kind);
                     }
@@ -111,8 +130,25 @@ internal static class CelExpressionTypeChecker
             case "contains": case "startsWith": case "endsWith": case "matches":
                 valid = Is(a, Kind.String) && Is(b, Kind.String); result = Kind.Boolean; break;
         }
-        return valid ? (new(result), null) : (default, "Несовместимые типы аргументов операции или функции: " + function);
+        return valid ? (new(result, MayBeNull: mayBeNull), null) : (default, "Несовместимые типы аргументов операции или функции: " + function);
     }
+
+    private static (string Path, int Branch)? NonNullBranch(Expr condition)
+    {
+        if (condition.CallExpr is not { Target: null, Args.Count: 2, Function: "_==_" or "_!=_" } comparison) return null;
+        var left = comparison.Args[0];
+        var right = comparison.Args[1];
+        var path = left.ConstExpr?.HasNullValue == true ? FieldPath(right) :
+            right.ConstExpr?.HasNullValue == true ? FieldPath(left) : null;
+        return path is null ? null : (path, comparison.Function == "_!=_" ? 1 : 2);
+    }
+
+    private static string? FieldPath(Expr expr) => expr.ExprKindCase switch
+    {
+        Expr.ExprKindOneofCase.IdentExpr => expr.IdentExpr.Name,
+        Expr.ExprKindOneofCase.SelectExpr when FieldPath(expr.SelectExpr.Operand) is { } parent => parent + "." + expr.SelectExpr.Field,
+        _ => null
+    };
 
     private static Kind ToKind(FieldType type) => type switch
     {

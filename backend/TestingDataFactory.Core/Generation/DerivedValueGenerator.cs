@@ -61,7 +61,7 @@ internal sealed class DerivedValueGenerator
             if (numeric < field.Min || numeric > field.Max) throw new InvalidOperationException("Результат derived за пределами диапазона.");
             value = numeric;
         }
-        if (value is null && field.NullRate is not > 0) throw new InvalidOperationException("derived вернул NULL для поля без null_rate.");
+        if (value is null && !field.AllowsNull) throw new InvalidOperationException("derived вернул NULL для поля без положительного null_rate.");
         if (value is string text && (text.Length < field.MinLength || text.Length > field.MaxLength)) throw new InvalidOperationException("Результат derived не соответствует ограничениям длины.");
         if (value is not null && used is not null && !used.Add(value)) throw new InvalidOperationException("Результат derived нарушает unique.");
         return value;

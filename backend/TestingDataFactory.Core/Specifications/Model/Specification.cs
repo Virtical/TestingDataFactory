@@ -45,6 +45,8 @@ public sealed record FieldDefinition(
     public FieldReference? Reference => ValueSource as FieldReference;
     public string? Generator => (ValueSource as FieldValueSource.Generator)?.Name;
     public CelExpression? Derived => (ValueSource as FieldValueSource.Derived)?.Expression;
+
+    internal bool AllowsNull => NullRate is > 0;
 }
 
 /// <summary>Дата, время или дата и время; отсутствие смещения обозначает локальное время без часового пояса.</summary>

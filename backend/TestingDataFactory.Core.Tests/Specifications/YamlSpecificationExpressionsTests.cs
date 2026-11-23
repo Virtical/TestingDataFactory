@@ -62,6 +62,7 @@ public class YamlSpecificationExpressionsTests
 
     [TestCase("value + 1", "integer")]
     [TestCase("value == null ? 0 : value", "integer")]
+    [TestCase("true ? 1 : null", "integer")]
     [TestCase("value in [1, 2, -3]", "boolean")]
     [TestCase("size('abc') > 0", "boolean")]
     [TestCase("'abc'.contains('b')", "boolean")]
@@ -112,6 +113,50 @@ public class YamlSpecificationExpressionsTests
     {
         var result = parser.Parse(Document("{ type: boolean, derived: \"'text'\" }"));
         Assert.That(result.Diagnostics.Select(d => d.Code), Does.Contain("INVALID_CEL"));
+    }
+
+    [TestCase("null", "")]
+    [TestCase("value > 0 ? null : value", "")]
+    [TestCase("value > 0 ? value : null", ", null_rate: 0")]
+    [TestCase("value > 0 ? (value > 1 ? value : null) : 0", "")]
+    public void RejectsNullableDerivedResultForRequiredField(string expression, string nullRate)
+    {
+        var result = parser.Parse(Document($"{{ type: integer, derived: \"{expression}\"{nullRate} }}"));
+
+        var error = result.Diagnostics.Single();
+        Assert.That(error.Code, Is.EqualTo("INVALID_CEL"));
+        Assert.That(error.Path, Is.EqualTo("$.tables['items'].fields['output'].derived"));
+        Assert.That(error.Message, Does.Contain("null_rate"));
+    }
+
+    [TestCase("null")]
+    [TestCase("value > 0 ? null : value")]
+    [TestCase("value > 0 ? 1 : null")]
+    public void AcceptsNullableDerivedResultWhenNullRateIsPositive(string expression)
+    {
+        var result = parser.Parse(Document($"{{ type: integer, derived: \"{expression}\", null_rate: 0.1 }}"));
+
+        Assert.That(result.IsSuccess, Is.True, string.Join("; ", result.Diagnostics));
+    }
+
+    [TestCase("value", false)]
+    [TestCase("value == null ? 0 : value", true)]
+    [TestCase("null != value ? (value > 0 ? value : 0) : 0", true)]
+    public void AccountsForNullableInputsAndNullGuards(string expression, bool isValid)
+    {
+        var yaml = Document($"{{ type: integer, derived: \"{expression}\" }}")
+            .Replace("value: { type: integer }", "value: { type: integer, null_rate: 0.1 }");
+        var result = parser.Parse(yaml);
+
+        Assert.That(result.IsSuccess, Is.EqualTo(isValid), string.Join("; ", result.Diagnostics));
+    }
+
+    [Test]
+    public void ChecksNonNullBranchTypeForNullableDerivedResult()
+    {
+        var result = parser.Parse(Document("{ type: integer, null_rate: 0.1, derived: \"value > 0 ? null : 'text'\" }"));
+
+        Assert.That(result.Diagnostics.Select(d => d.Code), Is.EqualTo(new[] { "INVALID_CEL" }));
     }
 
     [Test]

@@ -47,7 +47,7 @@ internal static class CelExpressionValidator
     }
 
     public static (CelExpression? Expression, string? Error) Validate(string source, IEnumerable<string> variables,
-        bool booleanResult = false, FieldType? expectedType = null, IReadOnlyDictionary<string, FieldType>? variableTypes = null,
+        bool booleanResult = false, FieldDefinition? expectedField = null, IReadOnlyDictionary<string, FieldType>? variableTypes = null,
         IReadOnlyDictionary<string, FieldDefinition>? fields = null)
     {
         if (source.Length > 4096 || NestingTooDeep(source)) return (null, "Выражение слишком длинное или слишком глубоко вложено.");
@@ -56,15 +56,24 @@ internal static class CelExpressionValidator
         {
             // Cel.NET разбирает десятичные литералы в текущей культуре; формат CEL всегда использует точку.
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-            var declarations = variables.Distinct(StringComparer.Ordinal).Select(name => Decls.NewVar(name, Decls.Dyn)).ToArray();
-            var environment = Cel.Env.NewEnv(EnvOptions.ClearMacros(), EnvOptions.Declarations(declarations));
+            var declarations = variables.Distinct(StringComparer.Ordinal).Select(name => Decls.NewVar(name, Decls.Dyn)).ToList();
+            var conditionalNull = "@conditional_null";
+            if (expectedField is not null)
+            {
+                while (declarations.Any(declaration => declaration.Name == conditionalNull)) conditionalNull += "_";
+                declarations.Add(Decls.NewVar(conditionalNull, Decls.Dyn));
+            }
+            var environment = Cel.Env.NewEnv(EnvOptions.ClearMacros(), EnvOptions.Declarations(declarations.ToArray()));
             var parsed = environment.Parse(source);
             if (parsed.HasIssues() || parsed.Ast is null) return (null, parsed.Issues?.ToString() ?? "Не удалось разобрать CEL-выражение.");
             var dependencies = new HashSet<string>(StringComparer.Ordinal);
             if (!CheckNode(parsed.Ast.Expr, dependencies, false, 0, out var error)) return (null, error);
+            var typeError = CelExpressionTypeChecker.Validate(parsed.Ast.Expr, variableTypes, fields, booleanResult, expectedField);
+            // Для CEL-проверки перегрузок ветка с null имеет тип dyn. Тип результата и null_rate
+            // проверяются по исходному AST, а вычисление использует исходное выражение.
+            if (expectedField is not null) WidenConditionalNulls(parsed.Ast.Expr, conditionalNull);
             var checkedAst = environment.Check(parsed.Ast);
             if (checkedAst.HasIssues() || checkedAst.Ast is null) return (null, checkedAst.Issues?.ToString() ?? "Не удалось проверить CEL-выражение.");
-            var typeError = CelExpressionTypeChecker.Validate(parsed.Ast.Expr, variableTypes, fields, booleanResult, expectedType);
             if (typeError is not null) return (null, typeError);
             var result = checkedAst.Ast.ResultType;
             if (result is null) return (null, "Не удалось определить тип результата CEL-выражения.");
@@ -80,7 +89,7 @@ internal static class CelExpressionValidator
                 };
             if (booleanResult && !result.Equals(Decls.Bool) && !result.Equals(Decls.Dyn))
                 return (null, "Выражение правила должно возвращать логическое значение.");
-            var expected = expectedType switch
+            var expected = expectedField?.Type switch
             {
                 FieldType.Integer => Decls.Int,
                 FieldType.Decimal => Decls.Double,
@@ -89,11 +98,26 @@ internal static class CelExpressionValidator
                 _ => null
             };
             if (expected is not null && !result.Equals(Decls.Dyn) && !result.Equals(expected) &&
-                !(expectedType == FieldType.Decimal && result.Equals(Decls.Int)))
+                !(expectedField!.Type == FieldType.Decimal && result.Equals(Decls.Int)) &&
+                !(expectedField.AllowsNull && result.Equals(Decls.Null)))
                 return (null, "Тип результата выражения несовместим с типом поля.");
             return (new CelExpression(source, Array.AsReadOnly(dependencies.ToArray())), null);
         }
         finally { CultureInfo.CurrentCulture = savedCulture; }
+    }
+
+    private static void WidenConditionalNulls(Expr expr, string conditionalNull)
+    {
+        if (expr.SelectExpr is { } select) WidenConditionalNulls(select.Operand, conditionalNull);
+        if (expr.CallExpr is not { } call) return;
+        if (call.Target is not null) WidenConditionalNulls(call.Target, conditionalNull);
+        for (var i = 0; i < call.Args.Count; i++)
+        {
+            var argument = call.Args[i];
+            if (call.Function == "_?_:_" && i is 1 or 2 && argument.ConstExpr?.HasNullValue == true)
+                argument.IdentExpr = new Expr.Types.Ident { Name = conditionalNull };
+            else WidenConditionalNulls(argument, conditionalNull);
+        }
     }
 
     private static bool CheckNode(Expr expr, HashSet<string> dependencies, bool literalList, int depth, out string error)
