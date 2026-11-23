@@ -1,0 +1,56 @@
+spec_version: '1.0'
+locale: ru_RU
+ 
+types:
+  money:      { type: decimal, min: 0, scale: 2 }
+  plan:       { enum: { free: 0.5, pro: 0.35, enterprise: 0.15 } }
+  sub_status: { enum: [active, cancelled, expired] }
+  geo:
+    enum:
+      dictionary: world_cities          # столбцы: country, city, currency
+      where: country in ['RU', 'KZ', 'BY']
+ 
+tables:
+  accounts:
+    fields:
+      id:       { type: uuid, primary: true }
+      country:  { type: geo, column: country }
+      city:     { type: geo, column: city }
+      currency: { type: geo, column: currency }
+ 
+  subscriptions:
+    fields:
+      id:           { type: uuid, primary: true }
+      account_id:   { ref: accounts.id, per_parent: { min: 1, max: 3 } }
+      plan:         { type: plan }
+      start_date:   { type: date, min: '2024-01-01', max: '2026-06-30' }
+      end_date:     { type: date, null_rate: 0.4 }
+      status:       { type: sub_status }
+      cancelled_at: { type: datetime, null_rate: 0.5 }
+      base_price:   { type: money }
+      discount_pct: { type: integer, min: 0, max: 50 }
+      final_price:  { type: money, derived: base_price * (100 - discount_pct) / 100 }
+    rules:
+      - expr: end_date == null || end_date >= start_date
+        message: Дата окончания раньше даты начала
+      - when: status == 'cancelled'
+        expr: cancelled_at != null && end_date != null
+      - when: status != 'cancelled'
+        expr: cancelled_at == null
+      - when: plan == 'free'
+        expr: base_price == 0 && discount_pct == 0
+      - when: plan == 'enterprise'
+        expr: base_price >= 50000
+        severity: warning
+ 
+  invoices:
+    fields:
+      id:              { type: uuid, primary: true }
+      subscription_id: { ref: subscriptions.id, per_parent: { min: 1, max: 12 } }
+      amount:          { type: money }
+ 
+generation:
+  seed: 7
+  rows: { accounts: 2000 }
+  mode: anomalies
+  output: { csv: {} }
