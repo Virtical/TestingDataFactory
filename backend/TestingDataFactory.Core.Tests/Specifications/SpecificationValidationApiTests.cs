@@ -61,6 +61,26 @@ public class SpecificationValidationApiTests
     }
 
     [Test]
+    public void GenerationValidationChecksEffectiveOptionsWithoutGeneratingRows()
+    {
+        var parsed = parser.Parse("""
+            spec_version: '1.0'
+            tables: { t: { fields: { id: { type: integer } } } }
+            generation: { rows: { t: 2 }, output: { json: {} } }
+            """);
+        Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
+
+        var unsupportedOutput = parser.ValidateGeneration(parsed.Specification!);
+        Assert.That(unsupportedOutput.Diagnostics.Select(d => d.Code), Is.EqualTo(new[] { "UNSUPPORTED_OUTPUT" }));
+
+        var valid = parser.ValidateGeneration(parsed.Specification!, new GenerationOverrides(Output: new CsvOutput()));
+        Assert.That(valid.IsSuccess, Is.True, string.Join("; ", valid.Diagnostics));
+        Assert.That(valid.Options!.Rows["t"], Is.EqualTo(2));
+        Assert.That(valid.Options.Output, Is.EqualTo(new CsvOutput()));
+        Assert.That(valid.Options.Seed, Is.Null);
+    }
+
+    [Test]
     public void GenerationOptionsRejectRowsForChildAndUnknownTable()
     {
         var parsed = parser.Parse("spec_version: '1.0'\ntables: { parent: { fields: { id: { type: integer } } }, child: { fields: { id: { ref: parent.id } } } }");

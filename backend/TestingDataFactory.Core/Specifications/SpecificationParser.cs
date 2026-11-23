@@ -36,14 +36,20 @@ public sealed class SpecificationParser
             : new(null, null, errors.AsReadOnly());
     }
 
+    /// <summary>Проверяет спецификацию и параметры запуска на совместимость с генератором без создания строк.</summary>
+    public ValidationResult ValidateGeneration(ParsedSpecification specification, GenerationOverrides? overrides = null)
+    {
+        var validation = Validate(specification, overrides ?? new GenerationOverrides());
+        if (!validation.IsSuccess) return validation;
+        var errors = TableGenerator.Check(validation.Specification!, validation.Options!);
+        return errors.Count == 0 ? validation : new(null, null, errors.AsReadOnly());
+    }
+
     /// <summary>Проверяет спецификацию и подготавливает поток строк таблиц.</summary>
     public GenerationResult Generate(ParsedSpecification specification, GenerationOverrides? overrides = null)
     {
-        ArgumentNullException.ThrowIfNull(specification);
-        var validation = Validate(specification, overrides ?? new GenerationOverrides());
+        var validation = ValidateGeneration(specification, overrides);
         if (!validation.IsSuccess) return new(null, null, validation.Diagnostics);
-        var errors = TableGenerator.Check(validation.Specification!, validation.Options!);
-        if (errors.Count != 0) return new(null, null, errors.AsReadOnly());
         var seed = validation.Options!.Seed ?? BinaryPrimitives.ReadInt32LittleEndian(RandomNumberGenerator.GetBytes(sizeof(int)));
         var options = validation.Options with { Seed = seed, Output = validation.Options.Output ?? new CsvOutput() };
         var columns = validation.Specification!.TableOrder.ToDictionary(name => name,

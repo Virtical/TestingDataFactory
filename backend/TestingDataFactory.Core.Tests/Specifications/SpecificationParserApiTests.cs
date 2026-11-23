@@ -9,10 +9,10 @@ namespace TestingDataFactory.Core.Tests.Specifications;
 public class SpecificationParserApiTests
 {
     [Test]
-    public void PublicParserExposesParseValidateAndGenerate()
+    public void PublicParserExposesParseValidateValidateGenerationAndGenerate()
     {
         var methods = typeof(SpecificationParser).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-        Assert.That(methods.Select(m => m.Name), Is.EquivalentTo(new[] { "Parse", "Validate", "Generate" }));
+        Assert.That(methods.Select(m => m.Name), Is.EquivalentTo(new[] { "Parse", "Validate", "ValidateGeneration", "Generate" }));
         var parse = methods.Single(m => m.Name == "Parse");
         Assert.That(parse.ReturnType, Is.EqualTo(typeof(ParseResult)));
         Assert.That(parse.GetParameters().Select(p => p.ParameterType), Is.EqualTo(new[] { typeof(string) }));

@@ -168,13 +168,23 @@ public class RelatedGenerationTests
     }
 
     [Test]
-    public void RejectsUnsupportedDerivedBeforeStreaming()
+    public void RejectsUnsupportedDerivedDuringGenerationValidation()
     {
         var parsed = parser.Parse("spec_version: '1.0'\ntables: { t: { fields: { x: { generator: person.full_name }, y: { type: boolean, derived: \"x.matches('.*')\" } } } }");
         Assert.That(parsed.IsSuccess, Is.True, string.Join("; ", parsed.Diagnostics));
-        var result = parser.Generate(parsed.Specification!, new GenerationOverrides(Rows: new Dictionary<string, int> { ["t"] = 1 }));
+        var specification = parsed.Specification!;
+        var overrides = new GenerationOverrides(Rows: new Dictionary<string, int> { ["t"] = 1 });
+        Assert.That(parser.Validate(specification, overrides).IsSuccess, Is.True);
+
+        var validation = parser.ValidateGeneration(specification, overrides);
+        Assert.That(validation.IsSuccess, Is.False);
+        var diagnostic = validation.Diagnostics.Single();
+        Assert.That(diagnostic.Code, Is.EqualTo("UNSUPPORTED_DERIVED"));
+        Assert.That(diagnostic.Path, Is.EqualTo("$.tables['t'].fields['y'].derived"));
+
+        var result = parser.Generate(specification, overrides);
         Assert.That(result.Rows, Is.Null);
-        Assert.That(result.Diagnostics.Select(d => d.Code), Does.Contain("UNSUPPORTED_DERIVED"));
+        Assert.That(result.Diagnostics, Is.EqualTo(validation.Diagnostics));
     }
 
     [Test]
