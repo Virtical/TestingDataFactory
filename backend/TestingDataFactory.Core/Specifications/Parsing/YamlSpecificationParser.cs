@@ -265,11 +265,13 @@ internal sealed partial class YamlSpecificationParser
 
     private static void CheckKeys(YamlMappingNode mapping, string[] allowed, string path, List<SpecificationDiagnostic> errors)
     {
+        IReadOnlyList<string>? allowedKeys = null;
         foreach (var key in mapping.Children.Keys)
         {
             var name = Name(key, path, errors);
             if (name is not null && !allowed.Contains(name, StringComparer.Ordinal))
-                Error(errors, "UNSUPPORTED_PARAMETER", "Неизвестный или пока не поддерживаемый параметр.", ChildPath(path, name), key);
+                Error(errors, "UNSUPPORTED_PARAMETER", "Неизвестный или пока не поддерживаемый параметр.",
+                    ChildPath(path, name), key, allowedKeys ??= Array.AsReadOnly(allowed.ToArray()));
         }
     }
 
@@ -332,6 +334,7 @@ internal sealed partial class YamlSpecificationParser
         (node.Style != ScalarStyle.Plain ||
          (!bool.TryParse(node.Value, out _) && !decimal.TryParse(node.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out _)));
     private static string ChildPath(string path, string name) => path + "['" + name.Replace("'", "\\'") + "']";
-    private static void Error(List<SpecificationDiagnostic> errors, string code, string message, string path, YamlNode node) =>
-        errors.Add(new(code, message, path, node.Start.Line, node.Start.Column));
+    private static void Error(List<SpecificationDiagnostic> errors, string code, string message, string path, YamlNode node,
+        IReadOnlyList<string>? allowedKeys = null) =>
+        errors.Add(new(code, message, path, node.Start.Line, node.Start.Column) { AllowedKeys = allowedKeys });
 }
