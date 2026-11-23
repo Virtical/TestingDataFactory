@@ -8,17 +8,19 @@ internal sealed class SemanticValueGenerator
 {
     private const int MaxAttempts = 1000;
     private readonly Faker faker;
+    private readonly Func<Faker, string> generate;
     private readonly FieldDefinition field;
     private readonly HashSet<string> used = new(StringComparer.Ordinal);
 
     public SemanticValueGenerator(FieldDefinition field, int seed)
     {
         ArgumentNullException.ThrowIfNull(field);
-        if (field.Generator is null || !SemanticGeneratorCatalog.Contains(field.Generator))
+        if (field.Generator is null || !SemanticGeneratorCatalog.TryGetGenerator(field.Generator, out var generate))
             throw new ArgumentException("Поле должно содержать поддерживаемый генератор.", nameof(field));
         if (field.Locale is null || !SemanticGeneratorCatalog.TryResolveLocale(field.Locale, out var locale))
             throw new ArgumentException("Поле должно содержать поддерживаемую локаль.", nameof(field));
         this.field = field;
+        this.generate = generate;
         faker = new Faker(locale) { Random = new Randomizer(seed) };
     }
 
@@ -28,18 +30,7 @@ internal sealed class SemanticValueGenerator
         if (field.NullRate is > 0 && (decimal)faker.Random.Double() < field.NullRate) return null;
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var value = field.Generator switch
-            {
-                "person.full_name" => faker.Name.FullName(),
-                "person.first_name" => faker.Name.FirstName(),
-                "person.last_name" => faker.Name.LastName(),
-                "internet.email" => faker.Internet.Email(),
-                "internet.username" => faker.Internet.UserName(),
-                "phone" => faker.Phone.PhoneNumber(),
-                "address.city" => faker.Address.City(),
-                "finance.card_number" => faker.Finance.CreditCardNumber(),
-                _ => throw new InvalidOperationException("Неизвестный генератор.")
-            };
+            var value = generate(faker);
             if (field.MinLength is int min && value.Length < min) continue;
             if (field.MaxLength is int max && value.Length > max) continue;
             if (field.Unique && !used.Add(value)) continue;
