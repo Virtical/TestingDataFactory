@@ -1,6 +1,8 @@
+using TestingDataFactory.Core.Specifications.Diagnostics;
+
 namespace TestingDataFactory.Worker.Specifications.Validation;
 
 public interface ISpecificationValidator
 {
-    Task<bool> IsValidAsync(string yaml, CancellationToken cancellationToken);
+    Task<IReadOnlyList<SpecificationDiagnostic>> ValidateAsync(string yaml, CancellationToken cancellationToken);
 }

@@ -50,6 +50,9 @@ public static class ServiceCollectionExtensions
                 "ModelClient BaseUrl must be an absolute HTTPS URI.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.Model),
                 "ModelClient Model is required.")
+            .Validate(options => options.MaxCorrectionAttempts is >= 0 and <= 5,
+                "ModelClient MaxCorrectionAttempts must be between zero and five.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.SystemPrompt), "ModelClient SystemPrompt is required.")
             .Validate(options => options.MaxOutputTokens is > 0 and <= 393216,
                 "ModelClient MaxOutputTokens must be between 1 and 393216.")
             .Validate(options => options.RequestTimeout > TimeSpan.Zero
@@ -86,7 +89,7 @@ public static class ServiceCollectionExtensions
             services.TryAddScoped<ISpecificationModelClient, DeepSeekSpecificationModelClient>();
         }
         services.TryAddSingleton<ISpecificationResponseExtractor, MarkdownSpecificationResponseExtractor>();
-        services.TryAddSingleton<ISpecificationValidator, NoOpSpecificationValidator>();
+        services.TryAddSingleton<ISpecificationValidator, CoreSpecificationValidator>();
 
         services.AddMassTransit(bus =>
         {

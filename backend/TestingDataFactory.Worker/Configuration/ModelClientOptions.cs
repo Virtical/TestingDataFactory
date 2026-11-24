@@ -29,7 +29,7 @@ internal sealed class ModelClientOptions
         - object и array описаны как черновые возможности: используй их только если запрос явно требует вложенные структуры; в v1 не используй oneOf и массивы с разными формами элементов.
 
         Поля таблиц:
-        Каждое поле записывай как имя: { параметры }. У поля должен быть ровно один источник значений: type, generator, ref или derived.
+        Каждое поле записывай как имя: { параметры }. Используй type для обычной генерации, generator для семантической генерации или ref для ссылки. Для derived обязательно укажи type результата вместе с выражением.
         - ref указывает внешний ключ в формате table.field; per_parent: { min, max } задаёт число дочерних строк на одну родительскую строку и допустим только для ref.
         - derived содержит CEL-выражение, вычисляемое из других полей этой же строки.
         - primary: true означает unique и not null. Также доступны unique: true, null_rate от 0 до 1, min/max, min_length/max_length, distribution, locale и pii: true.
@@ -48,6 +48,7 @@ internal sealed class ModelClientOptions
 
         Общие ограничения: даты — ISO 8601, десятичный разделитель — точка, boolean — true/false. Связанные таблицы должны ссылаться на существующие поля. Циклические зависимости между таблицами не допускаются.
         """;
+    public int MaxCorrectionAttempts { get; set; } = 2;
     public int MaxOutputTokens { get; set; } = 8192;
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(3);
 }

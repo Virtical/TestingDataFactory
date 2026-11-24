@@ -15,10 +15,31 @@ internal sealed class SpecificationGenerationService(
 {
     public async Task<SpecificationGenerationResult> GenerateAsync(string prompt, CancellationToken cancellationToken)
     {
-        string response;
+        SpecificationCorrection? correction = null;
         try
         {
-            response = await RequestModelAsync(prompt, cancellationToken);
+            for (var attempt = 0; attempt <= modelOptions.Value.MaxCorrectionAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var response = await RequestModelAsync(prompt, correction, cancellationToken);
+                var yaml = responseExtractor.ExtractYaml(response);
+                if (string.IsNullOrWhiteSpace(yaml))
+                {
+                    return new SpecificationGenerationResult.Failed(
+                        SpecificationGenerationErrorCodes.EmptyModelResponse,
+                        "Модель вернула пустую спецификацию.");
+                }
+
+                var diagnostics = await validator.ValidateAsync(yaml, cancellationToken);
+                if (diagnostics.Count == 0)
+                    return new SpecificationGenerationResult.Succeeded(yaml);
+
+                correction = new SpecificationCorrection(yaml, diagnostics);
+            }
+
+            return new SpecificationGenerationResult.Failed(
+                SpecificationGenerationErrorCodes.InvalidSpecification,
+                "Не удалось получить корректную спецификацию за отведённое число исправлений.");
         }
         catch (PermanentModelException exception)
         {
@@ -37,33 +58,16 @@ internal sealed class SpecificationGenerationService(
             }
         }
 
-        var yaml = responseExtractor.ExtractYaml(response);
-        if (string.IsNullOrWhiteSpace(yaml))
-        {
-            return new SpecificationGenerationResult.Failed(
-                SpecificationGenerationErrorCodes.EmptyModelResponse,
-                "Модель вернула пустую спецификацию.");
-        }
-
-        // TODO: обсудить ограниченный цикл исправления YAML, когда валидатор начнёт возвращать детали ошибок.
-        if (!await validator.IsValidAsync(yaml, cancellationToken))
-        {
-            return new SpecificationGenerationResult.Failed(
-                SpecificationGenerationErrorCodes.InvalidSpecification,
-                "Модель вернула некорректную спецификацию.");
-        }
-
-        return new SpecificationGenerationResult.Succeeded(yaml);
     }
 
-    private async Task<string> RequestModelAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> RequestModelAsync(string prompt, SpecificationCorrection? correction, CancellationToken cancellationToken)
     {
         using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         requestCancellation.CancelAfter(modelOptions.Value.RequestTimeout);
 
         try
         {
-            var response = await modelClient.GenerateAsync(prompt, requestCancellation.Token);
+            var response = await modelClient.GenerateAsync(prompt, requestCancellation.Token, correction);
             requestCancellation.Token.ThrowIfCancellationRequested();
             return response;
         }

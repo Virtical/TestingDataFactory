@@ -44,6 +44,26 @@ public sealed class DeepSeekSpecificationModelClientTests
         Assert.That(exception!.Message, Does.Not.Contain("sensitive provider detail"));
     }
 
+    [Test]
+    public async Task GenerateAsync_SendsPreviousYamlAndDiagnosticsForCorrection()
+    {
+        var chatClient = new FakeChatClient();
+        var client = new DeepSeekSpecificationModelClient(chatClient, Options.Create(new ModelClientOptions()));
+        var correction = new SpecificationCorrection("broken yaml",
+            [new("UNSUPPORTED_PARAMETER", "Unknown key", "$.tables.users")
+                { AllowedKeys = new[] { "fields" } }]);
+
+        await client.GenerateAsync("Original request", CancellationToken.None, correction);
+
+        Assert.That(chatClient.Messages.Select(message => message.Role),
+            Is.EqualTo(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.User }));
+        Assert.That(chatClient.Messages[1].Text, Is.EqualTo("Original request"));
+        Assert.That(chatClient.Messages[2].Text, Is.EqualTo("broken yaml"));
+        Assert.That(chatClient.Messages[3].Text, Does.Contain("UNSUPPORTED_PARAMETER"));
+        Assert.That(chatClient.Messages[3].Text, Does.Contain("AllowedKeys"));
+        Assert.That(chatClient.Messages[3].Text, Does.Contain("fields"));
+    }
+
     private sealed class FakeChatClient : IChatClient
     {
         public IReadOnlyList<ChatMessage> Messages { get; private set; } = [];

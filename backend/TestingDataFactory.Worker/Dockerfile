@@ -1,4 +1,4 @@
-﻿FROM mcr.microsoft.com/dotnet/runtime:10.0 AS base
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS base
 USER $APP_UID
 WORKDIR /app
 
@@ -6,6 +6,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["backend/TestingDataFactory.Contracts/TestingDataFactory.Contracts.csproj", "backend/TestingDataFactory.Contracts/"]
+COPY ["backend/TestingDataFactory.Core/TestingDataFactory.Core.csproj", "backend/TestingDataFactory.Core/"]
 COPY ["backend/TestingDataFactory.Worker/TestingDataFactory.Worker.csproj", "backend/TestingDataFactory.Worker/"]
 RUN dotnet restore "backend/TestingDataFactory.Worker/TestingDataFactory.Worker.csproj"
 COPY . .

@@ -9,5 +9,5 @@ public interface ISpecificationModelClient
     /// <exception cref="TransientModelException">Временный сетевой сбой, тайм-аут модели, HTTP 429 или временный отказ провайдера.</exception>
     /// <exception cref="PermanentModelException">Запрос окончательно отклонён или модель не настроена.</exception>
     /// <exception cref="OperationCanceledException">Вызов отменён переданным токеном.</exception>
-    Task<string> GenerateAsync(string prompt, CancellationToken cancellationToken);
+    Task<string> GenerateAsync(string prompt, CancellationToken cancellationToken, SpecificationCorrection? correction = null);
 }

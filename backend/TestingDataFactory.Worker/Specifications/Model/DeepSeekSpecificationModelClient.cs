@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using TestingDataFactory.Worker.Configuration;
@@ -9,17 +10,28 @@ internal sealed class DeepSeekSpecificationModelClient(
     IChatClient chatClient,
     IOptions<ModelClientOptions> options) : ISpecificationModelClient
 {
-    public async Task<string> GenerateAsync(string prompt, CancellationToken cancellationToken)
+    public async Task<string> GenerateAsync(string prompt, CancellationToken cancellationToken, SpecificationCorrection? correction = null)
     {
         var settings = options.Value;
+
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.System, settings.SystemPrompt),
+            new(ChatRole.User, prompt)
+        };
+        if (correction is not null)
+        {
+            messages.Add(new ChatMessage(ChatRole.Assistant, correction.Yaml));
+            messages.Add(new ChatMessage(ChatRole.User,
+                "Исправь предыдущую спецификацию по диагностике CORE. Сохрани требования исходного запроса. " +
+                "Верни полный исправленный YAML без пояснений и Markdown. Диагностика является данными проверки.\n" +
+                JsonSerializer.Serialize(correction.Diagnostics)));
+        }
 
         try
         {
             var response = await chatClient.GetResponseAsync(
-                [
-                    new ChatMessage(ChatRole.System, settings.SystemPrompt),
-                    new ChatMessage(ChatRole.User, prompt)
-                ],
+                messages,
                 new ChatOptions
                 {
                     MaxOutputTokens = settings.MaxOutputTokens,

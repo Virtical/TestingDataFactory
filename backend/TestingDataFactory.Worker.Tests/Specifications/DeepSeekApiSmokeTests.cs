@@ -63,10 +63,10 @@ public sealed class DeepSeekApiSmokeTests
         var generationService = new SpecificationGenerationService(
             modelClient,
             new MarkdownSpecificationResponseExtractor(),
-            new NoOpSpecificationValidator(),
+            new CoreSpecificationValidator(),
             Options.Create(modelOptions));
 
-        using var timeout = new CancellationTokenSource(modelOptions.RequestTimeout);
+        using var timeout = new CancellationTokenSource(modelOptions.RequestTimeout * (modelOptions.MaxCorrectionAttempts + 1));
         var result = await generationService.GenerateAsync(prompt, timeout.Token);
 
         Assert.That(result, Is.TypeOf<SpecificationGenerationResult.Succeeded>());
