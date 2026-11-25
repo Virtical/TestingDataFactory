@@ -141,6 +141,27 @@
     color: var(--color-icon);
 }
 
+.spec-card--upload {
+    color: inherit;
+    text-align: left;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.spec-card--upload:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    box-shadow: 0 4px 16px rgb(64 115 255 / 10%);
+}
+
+.spec-card--upload:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 4px;
+}
+
+.spec-card--upload:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .spec-card__title {
     font-size: 18px;
     font-weight: 600;
