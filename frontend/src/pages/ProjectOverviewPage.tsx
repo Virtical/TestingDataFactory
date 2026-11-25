@@ -112,7 +112,12 @@ export function ProjectOverviewPage() {
                                     <p className="spec-info-card__details">{details}</p>
                                 </div>
                                 <div className="spec-info-card__actions">
-                                    <button className="btn btn--outline" onClick={() => file && navigate('/specification', { state: file })}>Изменить спецификацию</button>
+                                    <button
+                                        className="btn btn--outline"
+                                        onClick={() => file && navigate('/builder', { state: file })}
+                                    >
+                                        Изменить спецификацию
+                                    </button>
                                     <button className="btn btn--outline" onClick={downloadSpecification}>Скачать {parsed?.format ?? 'YAML'}</button>
                                 </div>
                             </div>

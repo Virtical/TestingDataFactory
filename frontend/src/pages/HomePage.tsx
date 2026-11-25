@@ -40,7 +40,7 @@ export function HomePage() {
                 setUploadError('Файл пуст. Выберите файл с содержимым спецификации.');
                 return;
             }
-            navigate('/specification', { state: { fileName: file.name, content } });
+            navigate('/builder', { state: { fileName: file.name, content } });
         } catch {
             setUploadError('Не удалось прочитать файл. Попробуйте выбрать его ещё раз.');
         } finally {

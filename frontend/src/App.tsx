@@ -7,7 +7,6 @@ import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProjectOverviewPage } from './pages/ProjectOverviewPage';
-import { SpecificationPage } from './pages/SpecificationPage';
 import { BuilderPage } from './pages/BuilderPage';
 
 function App() {
@@ -20,7 +19,6 @@ function App() {
                     </Route>
                     <Route element={<ProtectedRoute />}>
                         <Route path="/dashboard" element={<HomePage />} />
-                        <Route path="/specification" element={<SpecificationPage />} />
                         <Route path="/builder" element={<BuilderPage />} />
                         <Route path="/project/:id" element={<ProjectOverviewPage />} />
                     </Route>

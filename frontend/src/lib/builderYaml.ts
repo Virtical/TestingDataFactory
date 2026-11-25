@@ -139,7 +139,7 @@ export function readBuilderYaml(
         const data = parsed.data;
         knownProperties(
             data,
-            ['name', 'spec_version', 'locale', 'types', 'tables', 'generation'],
+            ['name', 'spec_version', 'version', 'locale', 'seed', 'types', 'tables', 'generation'],
             'Спецификация',
         );
         const generation = object(data.generation ?? {}, 'generation');
@@ -154,7 +154,7 @@ export function readBuilderYaml(
             const table = object(value, `Таблица ${name}`);
             knownProperties(
                 table,
-                ['description', 'locale', 'mode', 'seed', 'fields', 'rules'],
+                ['description', 'locale', 'mode', 'seed', 'rows', 'fields', 'rules'],
                 `Таблица ${name}`,
             );
             const existing = previous.tables.find(item => item.name === name);
@@ -178,7 +178,7 @@ export function readBuilderYaml(
                 name,
                 x: existing?.x ?? 60 + (index % 3) * 330,
                 y: existing?.y ?? 50 + Math.floor(index / 3) * 300,
-                rows: number(rows[name], 500) ?? 500,
+                rows: number(rows[name] ?? table.rows, 500) ?? 500,
                 description: text(table.description),
                 locale: text(table.locale),
                 mode: choice(table.mode, ['unique', 'distribution'], 'unique'),
@@ -233,10 +233,11 @@ export function readBuilderYaml(
                 previous.types.find(item => item.name === name),
             ),
         );
+        const sourceVersion = data.spec_version ?? data.version;
         const version =
-            typeof data.spec_version === 'number'
-                ? String(data.spec_version)
-                : text(data.spec_version, previous.version);
+            typeof sourceVersion === 'number'
+                ? String(sourceVersion)
+                : text(sourceVersion, previous.version);
 
         return {
             document: {
@@ -244,7 +245,7 @@ export function readBuilderYaml(
                 name: text(data.name, previous.name),
                 version,
                 locale: text(data.locale, previous.locale),
-                seed: number(generation.seed),
+                seed: number(generation.seed ?? data.seed),
                 output: choice(
                     output.sql ?? output.format,
                     ['postgres', 'mysql', 'sqlite', 'json', 'csv'],
