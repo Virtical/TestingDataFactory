@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { stringify } from 'yaml';
+import { validateDatasetSpecification, validateSpecification, type SpecificationValidation } from '../api/specifications';
+import { type ApiError } from '../api/request';
 import {
     ArrowLeft,
     ArrowReturnLeft,
@@ -36,8 +38,8 @@ import {
     serializeSpecification,
     updateField,
     updateTable,
-    validateDocument,
     type BuilderDocument,
+    type Diagnostic,
     type Selection,
 } from '../lib/builderModel';
 import './BuilderPage.css';
@@ -66,6 +68,21 @@ function historyReducer(state: History, action: HistoryAction): History {
     return state;
 }
 type Dialog = { kind: 'table' | 'type' } | { kind: 'field'; tableId: string } | { kind: 'delete' };
+
+function hasDuplicateNames(doc: BuilderDocument) {
+    const names = [
+        doc.tables.map(table => table.name),
+        doc.types.map(type => type.name),
+        ...doc.tables.map(table => table.fields.map(field => field.name)),
+    ];
+    return names.some(items => new Set(items).size !== items.length);
+}
+
+type ValidationState = {
+    source: string;
+    result?: SpecificationValidation;
+    error?: string;
+};
 
 function initialBuilderState(storageKey: string, file: SpecificationFile | null) {
     if (file) {
@@ -140,6 +157,7 @@ function BuilderEditor({
     const doc = history.present;
     const yamlStorageKey = `${storageKey}:yaml`;
     const [yamlContent, setYamlContent] = useState<string | null>(initial.yamlContent);
+    const [yamlResetSource, setYamlResetSource] = useState(initial.yamlContent);
     const [view, setView] = useState<'builder' | 'yaml'>(yamlContent === null ? 'builder' : 'yaml');
     const serialized = useMemo(() => serializeSpecification(doc), [doc]);
     const yamlResult = useMemo(() => {
@@ -175,8 +193,49 @@ function BuilderEditor({
         }
     }, [initial, importedFile, storageKey]);
 
-    const diagnostics = useMemo(() => validateDocument(currentDocument), [currentDocument]);
-    const hasErrors = diagnostics.some(item => item.severity === 'error');
+    const source = view === 'yaml' ? (yamlContent ?? serialized) : serialized;
+    const serializationError = view === 'builder' && hasDuplicateNames(doc)
+        ? 'Переименуйте повторяющиеся таблицы, типы или поля, чтобы их можно было записать в YAML.'
+        : null;
+    const [validation, setValidation] = useState<ValidationState | null>(null);
+    const [validationAttempt, setValidationAttempt] = useState(0);
+    const currentValidation = validation?.source === source ? validation : null;
+    const validationPending = !serializationError && currentValidation === null;
+    const canGenerate = !serializationError && currentValidation?.result?.isValid === true;
+    const diagnostics: Diagnostic[] = currentValidation?.result?.diagnostics.map(item => ({
+        message: `${item.path}${item.line == null ? '' : ` (строка ${item.line})`} — ${item.message}`,
+        severity: 'error',
+    })) ?? [];
+    if (serializationError) diagnostics.unshift({ message: serializationError, severity: 'error' });
+    const validationStatus = serializationError ?? currentValidation?.error ?? (validationPending
+        ? 'Проверяем спецификацию на сервере…'
+        : canGenerate ? 'Спецификация готова к генерации данных'
+            : `Ошибок в спецификации: ${diagnostics.length}`);
+    const retryValidation = () => {
+        setValidation(null);
+        setValidationAttempt(attempt => attempt + 1);
+    };
+
+    useEffect(() => {
+        if (serializationError) return;
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            try {
+                const result = await validateDatasetSpecification(source, controller.signal);
+                if (!controller.signal.aborted) setValidation({ source, result });
+            } catch (err) {
+                if (!controller.signal.aborted) {
+                    const error = err as ApiError;
+                    setValidation({ source, error: error.fields?.specification ?? error.message });
+                }
+            }
+        }, 350);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [source, serializationError, validationAttempt]);
     const selectedTable =
         'tableId' in selection ? doc.tables.find(item => item.id === selection.tableId) : undefined;
     const selectedField =
@@ -219,16 +278,12 @@ function BuilderEditor({
             }
             if (hasYamlChanges) change(currentDocument, 'Применены изменения из YAML');
         } else {
-            const names = [
-                doc.tables.map(table => table.name),
-                doc.types.map(type => type.name),
-                ...doc.tables.map(table => table.fields.map(field => field.name)),
-            ];
-            if (names.some(items => new Set(items).size !== items.length)) {
+            if (serializationError) {
                 setBottomTab('Диагностика');
-                setNotice('Устраните повторяющиеся имена перед переключением на YAML.');
+                setNotice(serializationError);
                 return false;
             }
+            setYamlResetSource(null);
         }
         setYamlContent(null);
         setView(nextView);
@@ -240,13 +295,13 @@ function BuilderEditor({
     };
     const save = useCallback(
         (manual = false) => {
-            if (yamlError) {
-                setNotice(
-                    'Не удалось сохранить: исправьте ошибку YAML. Введённый текст сохранён в редакторе.',
-                );
-                return false;
-            }
             try {
+                if (yamlError && yamlContent !== null) {
+                    localStorage.setItem(yamlStorageKey, yamlContent);
+                    setSaveError('');
+                    if (manual) setNotice('Исходный YAML сохранён в браузере.');
+                    return true;
+                }
                 localStorage.setItem(storageKey, JSON.stringify(currentDocument));
                 localStorage.removeItem(yamlStorageKey);
                 if (currentDocument !== doc) {
@@ -267,7 +322,7 @@ function BuilderEditor({
                 return false;
             }
         },
-        [doc, currentDocument, yamlError, storageKey, yamlStorageKey, addEvent],
+        [doc, currentDocument, yamlError, yamlContent, storageKey, yamlStorageKey, addEvent],
     );
     useEffect(() => {
         try {
@@ -342,24 +397,36 @@ function BuilderEditor({
             currentDocument.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim() ||
             'specification'
         }.yaml`,
-        content: view === 'yaml' ? (yamlContent ?? serialized) : serialized,
+        content: source,
     });
-    const download = (format: 'yaml' | 'json') => {
-        if (yamlError || hasErrors || !currentDocument.tables.length) {
+    const download = async (format: 'yaml' | 'json') => {
+        if (serializationError) {
             setBottomTab('Диагностика');
-            setNotice(
-                'Исправьте ошибки структуры перед экспортом. Черновик можно сохранить кнопкой «Сохранить».',
-            );
+            setNotice(serializationError);
             setMenuOpen(false);
+            return;
+        }
+        if (!canGenerate) {
+            try {
+                const result = await validateSpecification(source);
+                if (!result.isValid) {
+                    const diagnostic = result.diagnostics[0];
+                    setNotice(`${diagnostic.path} — ${diagnostic.message}`);
+                    return;
+                }
+            } catch (err) {
+                setNotice((err as ApiError).message);
+                return;
+            }
+        }
+        const data = format === 'json' ? readSpecification(file()).data : null;
+        if (format === 'json' && !data) {
+            setNotice('Не удалось преобразовать YAML в JSON.');
             return;
         }
         const url = URL.createObjectURL(
             new Blob(
-                [
-                    format === 'yaml'
-                        ? file().content
-                        : serializeSpecification(currentDocument, format),
-                ],
+                [data ? JSON.stringify(data, null, 2) : source],
                 {
                     type: format === 'json' ? 'application/json' : 'application/yaml',
                 },
@@ -566,7 +633,9 @@ function BuilderEditor({
                     className="builder-save-state"
                     role="status"
                 >
-                    {yamlError || hasYamlChanges ? (
+                    {yamlError ? (
+                        'Редактирование исходного YAML'
+                    ) : hasYamlChanges ? (
                         'Изменения YAML не применены'
                     ) : saveError ? (
                         'Не сохранено'
@@ -620,11 +689,11 @@ function BuilderEditor({
                     </div>
                     {menuOpen && (
                         <div className="builder-save__menu">
-                            <button onClick={() => download('yaml')}>
+                            <button onClick={() => void download('yaml')}>
                                 <Download size={16} />
                                 Скачать YAML
                             </button>
-                            <button onClick={() => download('json')}>
+                            <button onClick={() => void download('json')}>
                                 <Download size={16} />
                                 Скачать JSON
                             </button>
@@ -638,11 +707,8 @@ function BuilderEditor({
                                 Открыть YAML
                             </button>
                             <button
-                                disabled={
-                                    Boolean(yamlError) ||
-                                    hasErrors ||
-                                    !currentDocument.tables.length
-                                }
+                                disabled={!canGenerate}
+                                title={validationStatus}
                                 onClick={() => {
                                     if (save()) navigate('/project/builder', { state: file() });
                                 }}
@@ -650,6 +716,7 @@ function BuilderEditor({
                                 <Check2 size={16} />
                                 Спецификация готова
                             </button>
+                            <p role="status">{validationStatus}</p>
                             <p>
                                 {view === 'yaml'
                                     ? 'Чтобы применить YAML, нажмите «Сохранить».'
@@ -676,6 +743,9 @@ function BuilderEditor({
                     doc={doc}
                     onChange={change}
                     diagnostics={diagnostics}
+                    validationStatus={validationStatus}
+                    isValidated={canGenerate}
+                    onRetryValidation={currentValidation?.error ? retryValidation : undefined}
                     events={events}
                     tab={bottomTab}
                     onTabChange={setBottomTab}
@@ -686,10 +756,14 @@ function BuilderEditor({
             {view === 'yaml' && (
                 <BuilderYamlEditor
                     content={yamlContent ?? serialized}
-                    error={yamlError}
-                    hasChanges={hasYamlChanges}
+                    error={diagnostics.map(item => item.message).join('\n') || null}
+                    validationStatus={validationStatus}
+                    visualError={yamlError}
+                    isValidated={canGenerate}
+                    onRetryValidation={currentValidation?.error ? retryValidation : undefined}
+                    hasChanges={yamlContent !== null && yamlContent !== yamlResetSource && hasYamlChanges}
                     onChange={setYamlContent}
-                    onReset={() => setYamlContent(null)}
+                    onReset={() => setYamlContent(yamlResetSource)}
                 />
             )}
             {view === 'builder' && (

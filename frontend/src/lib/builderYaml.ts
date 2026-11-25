@@ -80,29 +80,40 @@ function readField(name: string, value: unknown, previous?: BuilderField): Build
         ],
         `Поле ${name}`,
     );
-    const distribution = object(data.distribution ?? {}, `Распределение ${name}`);
-    knownProperties(distribution, ['type', 'mean', 'std'], `Распределение ${name}`);
+    const distributionPath = `Распределение ${name}`;
+    const distribution: Properties = typeof data.distribution === 'string'
+        ? { type: data.distribution }
+        : object(data.distribution ?? {}, distributionPath);
+    knownProperties(distribution, ['type', 'mean', 'std', 'normal'], distributionPath);
+    const normal = distribution.normal === undefined ? distribution : object(distribution.normal, distributionPath);
+    knownProperties(normal, ['type', 'mean', 'std'], distributionPath);
+    const sourceType = text(data.type, 'string');
+    const temporal = ['date', 'datetime', 'time'].includes(sourceType);
 
     return {
         ...newField(name),
         id: previous?.id ?? newId(),
-        type: text(data.type, 'string'),
-        description: text(data.description),
+        type: sourceType === 'integer' ? 'int' : sourceType,
+        description: text(data.description, previous?.description),
         primary: boolean(data.primary),
         unique: boolean(data.unique),
         pii: boolean(data.pii),
         nullRate: (number(data.null_rate, 0) ?? 0) * 100,
-        min: number(data.min),
-        max: number(data.max),
-        precision: number(data.precision, 12) ?? 12,
+        min: temporal ? undefined : number(data.min),
+        max: temporal ? undefined : number(data.max),
+        temporalMin: temporal && data.min !== undefined ? text(data.min) : undefined,
+        temporalMax: temporal && data.max !== undefined ? text(data.max) : undefined,
+        precision: number(data.precision, previous?.precision ?? 12) ?? 12,
         scale: number(data.scale, 2) ?? 2,
         generator: text(data.generator),
         locale: text(data.locale),
         derived: data.derived !== undefined,
         expression: text(data.derived),
-        distribution: choice(distribution.type, ['', 'uniform', 'normal', 'lognormal'], ''),
-        mean: number(distribution.mean, 0) ?? 0,
-        std: number(distribution.std, 1) ?? 1,
+        distribution: distribution.normal === undefined
+            ? choice(distribution.type, ['', 'uniform', 'normal', 'lognormal'], '')
+            : 'normal',
+        mean: number(normal.mean, 0) ?? 0,
+        std: number(normal.std, 1) ?? 1,
     };
 }
 
@@ -116,12 +127,13 @@ function readType(name: string, value: unknown, previous?: BuilderType): Builder
     ) {
         throw new Error(`Тип ${name}: values должен содержать список строк без запятых.`);
     }
+    const base = text(data.type, 'string');
     return {
         id: previous?.id ?? newId(),
         name,
-        base: data.values !== undefined ? 'enum' : text(data.type, 'string'),
+        base: data.values !== undefined ? 'enum' : base === 'integer' ? 'int' : base,
         values: Array.isArray(data.values) ? data.values.join(', ') : '',
-        description: text(data.description),
+        description: text(data.description, previous?.description),
     };
 }
 
@@ -143,10 +155,22 @@ export function readBuilderYaml(
             'Спецификация',
         );
         const generation = object(data.generation ?? {}, 'generation');
-        knownProperties(generation, ['seed', 'rows', 'output'], 'generation');
+        knownProperties(generation, ['seed', 'rows', 'output', 'mode'], 'generation');
         const rows = object(generation.rows ?? {}, 'generation.rows');
         const output = object(generation.output ?? {}, 'generation.output');
-        knownProperties(output, ['sql', 'format'], 'generation.output');
+        knownProperties(output, ['sql', 'format', 'csv', 'json'], 'generation.output');
+        if (Object.keys(output).length > 1) {
+            throw new Error('generation.output: выберите один формат.');
+        }
+        const csv = object(output.csv ?? {}, 'generation.output.csv');
+        const json = object(output.json ?? {}, 'generation.output.json');
+        const sql = isRecord(output.sql) ? output.sql : {};
+        knownProperties(csv, ['delimiter'], 'generation.output.csv');
+        knownProperties(json, [], 'generation.output.json');
+        knownProperties(sql, ['dialect', 'style'], 'generation.output.sql');
+        const dialect = sql.dialect ?? output.sql;
+        const outputFormat = output.csv !== undefined ? 'csv' : output.json !== undefined ? 'json'
+            : dialect === 'postgresql' ? 'postgres' : dialect ?? output.format;
         const tableEntries = Object.entries(object(data.tables ?? {}, 'tables'));
         const rules: BuilderRule[] = [];
 
@@ -178,11 +202,11 @@ export function readBuilderYaml(
                 name,
                 x: existing?.x ?? 60 + (index % 3) * 330,
                 y: existing?.y ?? 50 + Math.floor(index / 3) * 300,
-                rows: number(rows[name] ?? table.rows, 500) ?? 500,
-                description: text(table.description),
+                rows: number(rows[name] ?? table.rows, 100) ?? 100,
+                description: text(table.description, existing?.description),
                 locale: text(table.locale),
-                mode: choice(table.mode, ['unique', 'distribution'], 'unique'),
-                seed: number(table.seed),
+                mode: choice(table.mode, ['unique', 'distribution'], existing?.mode ?? 'unique'),
+                seed: number(table.seed, existing?.seed),
                 fields: fields.map(([fieldName, field]) =>
                     readField(
                         fieldName,
@@ -212,11 +236,12 @@ export function readBuilderYaml(
                 const integrity = object(value.integrity ?? {}, 'integrity');
                 knownProperties(range, ['min', 'max'], 'per_parent');
                 knownProperties(integrity, ['foreign_key', 'on_delete'], 'integrity');
+                if (value.type === undefined) field.type = targetField.type;
                 field.reference = {
                     ...newReference(targetTable.id, targetField.id),
                     cardinality: choice(value.relationship, ['N:1', '1:1'], 'N:1'),
-                    min: number(range.min, 0) ?? 0,
-                    max: number(range.max, 8) ?? 8,
+                    min: number(range.min, 1) ?? 1,
+                    max: number(range.max, 1) ?? 1,
                     enforce: boolean(integrity.foreign_key, true),
                     restrict:
                         choice(integrity.on_delete, ['restrict', 'no_action'], 'restrict') ===
@@ -246,8 +271,13 @@ export function readBuilderYaml(
                 version,
                 locale: text(data.locale, previous.locale),
                 seed: number(generation.seed ?? data.seed),
+                generationMode: generation.mode === undefined
+                    ? undefined
+                    : choice(generation.mode, ['valid', 'edge_cases', 'anomalies'] as const, 'valid'),
+                csvDelimiter: csv.delimiter === undefined ? undefined : text(csv.delimiter),
+                sqlStyle: sql.style === undefined ? undefined : choice(sql.style, ['script', 'insert'] as const, 'script'),
                 output: choice(
-                    output.sql ?? output.format,
+                    outputFormat,
                     ['postgres', 'mysql', 'sqlite', 'json', 'csv'],
                     previous.output,
                 ),

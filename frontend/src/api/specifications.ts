@@ -155,6 +155,23 @@ export type SpecificationParseResult = {
     isSuccess: boolean;
 };
 
+export type SpecificationValidation = {
+    isValid: boolean;
+    diagnostics: SpecificationDiagnostic[];
+};
+
+export function validateDatasetSpecification(specification: string, signal: AbortSignal): Promise<SpecificationValidation> {
+    return request('/api/specifications/validate-generation', {
+        method: 'POST',
+        body: { specification, format: 'csv' },
+        signal,
+    });
+}
+
+export function validateSpecification(specification: string): Promise<SpecificationValidation> {
+    return request('/api/specifications/validate', { method: 'POST', body: { specification } });
+}
+
 export type SpecificationJob = {
     jobId: string;
     status: 'Queued' | 'Running' | 'Succeeded' | 'Failed';

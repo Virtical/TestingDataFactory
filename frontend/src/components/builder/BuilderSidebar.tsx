@@ -215,9 +215,7 @@ export function BuilderSidebar({
                         className="builder-tree-item"
                         onClick={() => onSelect({ kind: 'generation' })}
                     >
-                        output: {'{ '}
-                        {['json', 'csv'].includes(doc.output) ? 'format' : 'sql'}: {doc.output}
-                        {' }'}
+                        output: {doc.output === 'postgres' ? 'PostgreSQL' : doc.output.toUpperCase()}
                     </button>
                 </section>
             </div>

@@ -3,12 +3,18 @@ import { Check2, ExclamationCircle } from 'react-bootstrap-icons';
 type Props = {
     content: string;
     error: string | null;
+    visualError: string | null;
+    validationStatus: string;
+    isValidated: boolean;
+    onRetryValidation?: () => void;
     hasChanges: boolean;
     onChange: (value: string) => void;
     onReset: () => void;
 };
 
-export function BuilderYamlEditor({ content, error, hasChanges, onChange, onReset }: Props) {
+export function BuilderYamlEditor({
+    content, error, visualError, validationStatus, isValidated, onRetryValidation, hasChanges, onChange, onReset,
+}: Props) {
     return (
         <section
             className="builder-yaml"
@@ -45,9 +51,17 @@ export function BuilderYamlEditor({ content, error, hasChanges, onChange, onRese
                 className={`builder-yaml__status${error ? ' builder-text-error' : ''}`}
                 role="status"
             >
-                {error ? <ExclamationCircle size={18} /> : <Check2 size={20} />}
-                <span>{error ?? 'YAML готов к открытию в конструкторе'}</span>
+                {error ? <ExclamationCircle size={18} /> : isValidated ? <Check2 size={20} /> : null}
+                <span>{error ?? validationStatus}</span>
+                {onRetryValidation && (
+                    <button className="builder-inline-link" onClick={onRetryValidation}>Повторить проверку</button>
+                )}
             </p>
+            {visualError && (
+                <p className="builder-yaml__status builder-text-warning">
+                    Схема недоступна в визуальном режиме. {visualError}
+                </p>
+            )}
         </section>
     );
 }

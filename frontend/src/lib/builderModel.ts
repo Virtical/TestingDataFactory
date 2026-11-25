@@ -7,6 +7,7 @@ export const FIELD_TYPES = [
     'boolean',
     'date',
     'datetime',
+    'time',
     'uuid',
 ] as const;
 export const LOCALES = ['ru_RU', 'en_US', 'de_DE'] as const;
@@ -45,6 +46,8 @@ export type BuilderField = {
     locale: string;
     min?: number;
     max?: number;
+    temporalMin?: string;
+    temporalMax?: string;
     precision: number;
     scale: number;
     derived: boolean;
@@ -81,6 +84,9 @@ export type BuilderDocument = {
     locale: string;
     seed?: number;
     output: 'postgres' | 'mysql' | 'sqlite' | 'json' | 'csv';
+    generationMode?: 'valid' | 'edge_cases' | 'anomalies';
+    csvDelimiter?: string;
+    sqlStyle?: 'script' | 'insert';
     tables: BuilderTable[];
     types: BuilderType[];
     rules: BuilderRule[];
@@ -99,7 +105,7 @@ export const emptyDocument = (): BuilderDocument => ({
     version: '1.0',
     locale: 'ru_RU',
     seed: 2026,
-    output: 'postgres',
+    output: 'csv',
     tables: [],
     types: [],
     rules: [],
@@ -213,138 +219,14 @@ export function baseType(doc: BuilderDocument, type: string) {
     return doc.types.find(item => item.name === type)?.base ?? type;
 }
 
-export function validateDocument(doc: BuilderDocument): Diagnostic[] {
-    const results: Diagnostic[] = [];
-    const error = (message: string, selection?: Selection) =>
-        results.push({ message, severity: 'error', selection });
-    const checkNames = (names: string[], label: string) => {
-        const seen = new Set<string>();
-        names.forEach(name => {
-            if (!validName(name))
-                error(
-                    `${label} «${name}»: используйте латинские буквы, цифры и _; начните с буквы или _.`,
-                );
-            if (seen.has(name)) error(`${label} «${name}»: имя повторяется.`);
-            seen.add(name);
-        });
-    };
-    checkNames(
-        doc.tables.map(table => table.name),
-        'Таблица',
-    );
-    checkNames(
-        doc.types.map(type => type.name),
-        'Тип',
-    );
-    doc.types.forEach(type => {
-        if ((FIELD_TYPES as readonly string[]).includes(type.name))
-            error(`Имя типа «${type.name}» занято встроенным типом.`);
-        if (type.base === 'enum' && !type.values.split(',').some(value => value.trim()))
-            error(`Тип «${type.name}»: добавьте значения перечисления.`, {
-                kind: 'type',
-                typeId: type.id,
-            });
-    });
-    if (!doc.tables.length)
-        results.push({ severity: 'warning', message: 'Добавьте хотя бы одну таблицу.' });
-    if (!doc.name.trim()) error('Укажите название спецификации.', { kind: 'generation' });
-    if (!doc.version.trim()) error('Укажите версию спецификации.', { kind: 'generation' });
-    if (doc.seed !== undefined && !Number.isSafeInteger(doc.seed))
-        error('Seed должен быть целым числом.', { kind: 'generation' });
-    for (const table of doc.tables) {
-        const tableSelection: Selection = { kind: 'table', tableId: table.id };
-        if (!Number.isSafeInteger(table.rows) || table.rows < 1)
-            error(
-                `${table.name}: количество строк должно быть положительным целым числом.`,
-                tableSelection,
-            );
-        if (table.seed !== undefined && !Number.isSafeInteger(table.seed))
-            error(`${table.name}: Seed должен быть целым числом.`, tableSelection);
-        if (!table.fields.length)
-            error(`${table.name}: добавьте хотя бы одно поле.`, tableSelection);
-        checkNames(
-            table.fields.map(field => field.name),
-            `Поле в ${table.name}`,
-        );
-        for (const field of table.fields) {
-            const selection: Selection = { kind: 'field', tableId: table.id, fieldId: field.id };
-            const path = `${table.name}.${field.name}`;
-            if (![...FIELD_TYPES, ...doc.types.map(type => type.name)].includes(field.type))
-                error(`${path}: неизвестный тип «${field.type}».`, selection);
-            if (field.nullRate < 0 || field.nullRate > 100 || !Number.isFinite(field.nullRate))
-                error(`${path}: доля NULL должна быть от 0 до 100%.`, selection);
-            if (field.primary && field.nullRate > 0)
-                error(`${path}: первичный ключ не может содержать NULL.`, selection);
-            if (field.min !== undefined && field.max !== undefined && field.min > field.max)
-                error(`${path}: минимум больше максимума.`, selection);
-            if (
-                baseType(doc, field.type) === 'decimal' &&
-                (!Number.isInteger(field.precision) ||
-                    field.precision < 1 ||
-                    !Number.isInteger(field.scale) ||
-                    field.scale < 0 ||
-                    field.scale > field.precision)
-            )
-                error(`${path}: масштаб должен быть целым числом от 0 до точности.`, selection);
-            if (
-                (field.distribution === 'normal' || field.distribution === 'lognormal') &&
-                field.std <= 0
-            )
-                error(`${path}: стандартное отклонение должно быть больше нуля.`, selection);
-            if (field.derived && !field.expression.trim())
-                error(`${path}: задайте вычисляемое выражение.`, selection);
-            if (field.reference) {
-                const ref = field.reference;
-                const target = doc.tables
-                    .find(item => item.id === ref.tableId)
-                    ?.fields.find(item => item.id === ref.fieldId);
-                const relationSelection: Selection = {
-                    kind: 'relation',
-                    tableId: table.id,
-                    fieldId: field.id,
-                };
-                if (!target)
-                    error(
-                        `${path}: поле, на которое ссылается связь, не найдено.`,
-                        relationSelection,
-                    );
-                else {
-                    if (baseType(doc, field.type) !== baseType(doc, target.type))
-                        error(`${path}: типы полей связи не совпадают.`, relationSelection);
-                    if (!target.primary && !target.unique)
-                        error(
-                            `${path}: связь должна ссылаться на первичный или уникальный ключ.`,
-                            relationSelection,
-                        );
-                }
-                if (ref.tableId === table.id && ref.fieldId === field.id)
-                    error(`${path}: поле не может ссылаться само на себя.`, relationSelection);
-                if (
-                    !Number.isInteger(ref.min) ||
-                    !Number.isInteger(ref.max) ||
-                    ref.min < 0 ||
-                    ref.max < ref.min
-                )
-                    error(`${path}: проверьте диапазон дочерних записей.`, relationSelection);
-                if (ref.cardinality === '1:1' && ref.max > 1)
-                    error(
-                        `${path}: для связи 1:1 допустима одна дочерняя запись.`,
-                        relationSelection,
-                    );
-            }
-        }
-    }
-    doc.rules.forEach(rule => {
-        if (!doc.tables.some(table => table.id === rule.tableId))
-            error('У правила не выбрана таблица.');
-        if (!rule.expression.trim()) error('Заполните или удалите пустое правило CEL.');
-    });
-    return results;
-}
-
 export function specificationObject(doc: BuilderDocument) {
+    const output = doc.output === 'csv'
+        ? { csv: doc.csvDelimiter === undefined ? {} : { delimiter: doc.csvDelimiter } }
+        : doc.output === 'json'
+            ? { json: {} }
+            : { sql: { dialect: doc.output === 'postgres' ? 'postgresql' : doc.output,
+                ...(doc.sqlStyle ? { style: doc.sqlStyle } : {}) } };
     return {
-        name: doc.name,
         spec_version: doc.version,
         locale: doc.locale,
         types: Object.fromEntries(
@@ -358,8 +240,7 @@ export function specificationObject(doc: BuilderDocument) {
                                   .map(value => value.trim())
                                   .filter(Boolean),
                           }
-                        : { type: type.base }),
-                    ...(type.description ? { description: type.description } : {}),
+                        : { type: type.base === 'int' ? 'integer' : type.base }),
                 },
             ]),
         ),
@@ -367,10 +248,7 @@ export function specificationObject(doc: BuilderDocument) {
             doc.tables.map(table => [
                 table.name,
                 {
-                    ...(table.description ? { description: table.description } : {}),
                     ...(table.locale ? { locale: table.locale } : {}),
-                    mode: table.mode,
-                    ...(table.seed !== undefined ? { seed: table.seed } : {}),
                     fields: Object.fromEntries(
                         table.fields.map(field => {
                             const targetTable = doc.tables.find(
@@ -379,39 +257,33 @@ export function specificationObject(doc: BuilderDocument) {
                             const targetField = targetTable?.fields.find(
                                 item => item.id === field.reference?.fieldId,
                             );
+                            const temporal = ['date', 'datetime', 'time'].includes(baseType(doc, field.type));
+                            const min = temporal ? field.temporalMin : field.min;
+                            const max = temporal ? field.temporalMax : field.max;
+                            const distribution = field.distribution === 'normal'
+                                ? { normal: { mean: field.mean, std: field.std } }
+                                : field.distribution;
                             return [
                                 field.name,
                                 {
-                                    type: field.type,
-                                    ...(field.description
-                                        ? { description: field.description }
-                                        : {}),
+                                    ...(!field.reference ? { type: field.type === 'int' ? 'integer' : field.type } : {}),
                                     ...(field.primary ? { primary: true } : {}),
                                     ...(field.unique || field.reference?.cardinality === '1:1'
                                         ? { unique: true }
                                         : {}),
                                     ...(field.pii ? { pii: true } : {}),
                                     ...(field.nullRate ? { null_rate: field.nullRate / 100 } : {}),
-                                    ...(field.min !== undefined ? { min: field.min } : {}),
-                                    ...(field.max !== undefined ? { max: field.max } : {}),
+                                    ...(min !== undefined ? { min } : {}),
+                                    ...(max !== undefined ? { max } : {}),
                                     ...(baseType(doc, field.type) === 'decimal'
-                                        ? { precision: field.precision, scale: field.scale }
+                                        ? { scale: field.scale }
                                         : {}),
                                     ...(field.generator && !field.derived
                                         ? { generator: field.generator }
                                         : {}),
                                     ...(field.locale ? { locale: field.locale } : {}),
                                     ...(field.derived ? { derived: field.expression } : {}),
-                                    ...(field.distribution && !field.derived
-                                        ? {
-                                              distribution: {
-                                                  type: field.distribution,
-                                                  ...(field.distribution !== 'uniform'
-                                                      ? { mean: field.mean, std: field.std }
-                                                      : {}),
-                                              },
-                                          }
-                                        : {}),
+                                    ...(distribution && !field.derived ? { distribution } : {}),
                                     ...(field.reference && targetTable && targetField
                                         ? {
                                               ref: `${targetTable.name}.${targetField.name}`,
@@ -419,19 +291,6 @@ export function specificationObject(doc: BuilderDocument) {
                                                   min: field.reference.min,
                                                   max: field.reference.max,
                                               },
-                                              relationship: field.reference.cardinality,
-                                              integrity: {
-                                                  foreign_key: field.reference.enforce,
-                                                  on_delete: field.reference.restrict
-                                                      ? 'restrict'
-                                                      : 'no_action',
-                                              },
-                                              ...(field.reference.description
-                                                  ? {
-                                                        reference_description:
-                                                            field.reference.description,
-                                                    }
-                                                  : {}),
                                           }
                                         : {}),
                                 },
@@ -449,10 +308,11 @@ export function specificationObject(doc: BuilderDocument) {
         ),
         generation: {
             ...(doc.seed !== undefined ? { seed: doc.seed } : {}),
-            rows: Object.fromEntries(doc.tables.map(table => [table.name, table.rows])),
-            output: ['postgres', 'mysql', 'sqlite'].includes(doc.output)
-                ? { sql: doc.output }
-                : { format: doc.output },
+            ...(doc.generationMode ? { mode: doc.generationMode } : {}),
+            rows: Object.fromEntries(doc.tables
+                .filter(table => !table.fields.some(field => field.reference))
+                .map(table => [table.name, table.rows])),
+            output,
         },
     };
 }

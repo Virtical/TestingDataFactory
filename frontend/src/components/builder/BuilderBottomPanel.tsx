@@ -13,6 +13,9 @@ export function BuilderBottomPanel({
     doc,
     onChange,
     diagnostics,
+    validationStatus,
+    isValidated,
+    onRetryValidation,
     events,
     tab,
     onTabChange,
@@ -22,6 +25,9 @@ export function BuilderBottomPanel({
     doc: BuilderDocument;
     onChange: (doc: BuilderDocument, event?: string) => void;
     diagnostics: Diagnostic[];
+    validationStatus: string;
+    isValidated: boolean;
+    onRetryValidation?: () => void;
     events: BuilderEvent[];
     tab: string;
     onTabChange: (value: string) => void;
@@ -71,18 +77,17 @@ export function BuilderBottomPanel({
                             <span className="builder-count">{diagnostics.length}</span>
                         )}
                         {item === 'Валидация' &&
-                            doc.tables.length > 0 &&
                             (errors.length ? (
                                 <ExclamationCircle
                                     className="builder-text-warning"
                                     size={17}
                                 />
-                            ) : (
+                            ) : isValidated ? (
                                 <CheckCircle
                                     className="builder-text-success"
                                     size={17}
                                 />
-                            ))}
+                            ) : null)}
                     </button>
                 ))}
             </div>
@@ -226,41 +231,33 @@ export function BuilderBottomPanel({
                         ))
                     ) : (
                         <div className="builder-validation">
-                            <CheckCircle
-                                size={25}
-                                className="builder-text-success"
-                            />
+                            {isValidated && <CheckCircle size={25} className="builder-text-success" />}
                             <div>
-                                <strong>Ошибок структуры не найдено</strong>
-                                <p>Имена, типы, диапазоны и связи согласованы.</p>
+                                <strong role="status">{validationStatus}</strong>
+                                {onRetryValidation && (
+                                    <button className="builder-inline-link" onClick={onRetryValidation}>Повторить проверку</button>
+                                )}
                             </div>
                         </div>
                     )
                 ) : (
                     <div className="builder-validation">
-                        {errors.length || !doc.tables.length ? (
+                        {errors.length ? (
                             <ExclamationCircle
                                 size={27}
                                 className="builder-text-warning"
                             />
-                        ) : (
+                        ) : isValidated ? (
                             <CheckCircle
                                 size={27}
                                 className="builder-text-success"
                             />
-                        )}
+                        ) : null}
                         <div>
-                            <strong>
-                                {!doc.tables.length
-                                    ? 'Добавьте таблицу для проверки'
-                                    : errors.length
-                                      ? `Ошибок структуры: ${errors.length}`
-                                      : 'Структура спецификации корректна'}
-                            </strong>
-                            <p>Локально проверены имена, типы полей, связи и ограничения.</p>
-                            <p>
-                                Выражения CEL и сгенерированные данные требуют проверки на сервере.
-                            </p>
+                            <strong role="status">{validationStatus}</strong>
+                            {onRetryValidation && (
+                                <button className="builder-inline-link" onClick={onRetryValidation}>Повторить проверку</button>
+                            )}
                             {errors.length > 0 && (
                                 <button
                                     className="builder-inline-link"
