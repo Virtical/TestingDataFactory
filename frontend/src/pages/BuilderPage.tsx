@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { stringify } from 'yaml';
 import {
     ArrowLeft,
     ArrowReturnLeft,
@@ -17,6 +18,12 @@ import { BuilderBottomPanel, type BuilderEvent } from '../components/builder/Bui
 import { BuilderDialog, CreateItemDialog } from '../components/builder/BuilderDialog';
 import { BuilderYamlEditor } from '../components/builder/BuilderYamlEditor';
 import { readBuilderYaml } from '../lib/builderYaml';
+import {
+    isSpecificationFile,
+    readSpecification,
+    specificationTitle,
+    type SpecificationFile,
+} from '../lib/specificationDocument';
 import {
     baseType,
     emptyDocument,
@@ -60,45 +67,90 @@ function historyReducer(state: History, action: HistoryAction): History {
 }
 type Dialog = { kind: 'table' | 'type' } | { kind: 'field'; tableId: string } | { kind: 'delete' };
 
+function initialBuilderState(storageKey: string, file: SpecificationFile | null) {
+    if (file) {
+        const parsed = readSpecification(file);
+        const base = {
+            ...emptyDocument(),
+            name: specificationTitle(file, parsed.data),
+        };
+        const content =
+            parsed.format === 'JSON' && parsed.data ? stringify(parsed.data) : file.content;
+        const imported = parsed.error
+            ? { document: null, error: parsed.error }
+            : readBuilderYaml(content, base);
+
+        return {
+            doc: imported.document ?? base,
+            yamlContent: imported.error ? content : null,
+            error: imported.error,
+        };
+    }
+
+    let doc = emptyDocument();
+    let yamlContent: string | null = null;
+    try {
+        doc = readDraft(localStorage.getItem(storageKey)) ?? doc;
+        yamlContent = localStorage.getItem(`${storageKey}:yaml`);
+    } catch {
+        // Saving reports unavailable browser storage.
+    }
+    return { doc, yamlContent, error: null };
+}
+
 export function BuilderPage() {
     const { user } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [file] = useState(() => (isSpecificationFile(location.state) ? location.state : null));
+
+    useEffect(() => {
+        if (!isSpecificationFile(location.state)) return;
+
+        // Consume the imported file so reload restores the edited draft, not the original file.
+        navigate(
+            { pathname: location.pathname, search: location.search, hash: location.hash },
+            { replace: true, state: null },
+        );
+    }, [location, navigate]);
+
     return (
         <BuilderEditor
             key={user?.email}
             storageKey={`dataforge:builder:v1:${user?.email ?? 'local'}`}
+            file={file}
         />
     );
 }
 
-function BuilderEditor({ storageKey }: { storageKey: string }) {
+function BuilderEditor({
+    storageKey,
+    file: importedFile,
+}: {
+    storageKey: string;
+    file: SpecificationFile | null;
+}) {
     const navigate = useNavigate();
-    const [history, dispatch] = useReducer(historyReducer, storageKey, key => {
-        let doc: BuilderDocument | null = null;
-        try {
-            doc = readDraft(localStorage.getItem(key));
-        } catch {
-            /* Saving reports unavailable browser storage. */
-        }
-        return { past: [], present: doc ?? emptyDocument(), future: [] };
+    const [initial] = useState(() => initialBuilderState(storageKey, importedFile));
+    const [history, dispatch] = useReducer(historyReducer, {
+        past: [],
+        present: initial.doc,
+        future: [],
     });
     const doc = history.present;
     const yamlStorageKey = `${storageKey}:yaml`;
-    const [yamlContent, setYamlContent] = useState<string | null>(() => {
-        try {
-            return localStorage.getItem(yamlStorageKey);
-        } catch {
-            return null;
-        }
-    });
+    const [yamlContent, setYamlContent] = useState<string | null>(initial.yamlContent);
     const [view, setView] = useState<'builder' | 'yaml'>(yamlContent === null ? 'builder' : 'yaml');
     const serialized = useMemo(() => serializeSpecification(doc), [doc]);
-    const yamlResult = useMemo(
-        () =>
-            yamlContent === null || yamlContent === serialized
-                ? { document: doc, error: null }
-                : readBuilderYaml(yamlContent, doc),
-        [yamlContent, doc, serialized],
-    );
+    const yamlResult = useMemo(() => {
+        if (initial.error && yamlContent === initial.yamlContent) {
+            return { document: null, error: initial.error };
+        }
+
+        return yamlContent === null || yamlContent === serialized
+            ? { document: doc, error: null }
+            : readBuilderYaml(yamlContent, doc);
+    }, [initial, yamlContent, doc, serialized]);
     const currentDocument = view === 'yaml' ? (yamlResult.document ?? doc) : doc;
     const yamlError = view === 'yaml' ? yamlResult.error : null;
     const hasYamlChanges = yamlContent !== null && yamlContent !== serialized;
@@ -111,6 +163,18 @@ function BuilderEditor({ storageKey }: { storageKey: string }) {
     const [notice, setNotice] = useState('');
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!importedFile) return;
+
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(initial.doc));
+            setSavedDocument(initial.doc);
+        } catch {
+            setSaveError('Не удалось сохранить загруженную спецификацию в браузере.');
+        }
+    }, [initial, importedFile, storageKey]);
+
     const diagnostics = useMemo(() => validateDocument(currentDocument), [currentDocument]);
     const hasErrors = diagnostics.some(item => item.severity === 'error');
     const selectedTable =

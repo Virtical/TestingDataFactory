@@ -119,7 +119,7 @@ function DatasetOverview({ file }: { file: SpecificationFile }) {
                                     <p className="spec-info-card__details">{details}</p>
                                 </div>
                                 <div className="spec-info-card__actions">
-                                    <button type="button" className="btn btn--outline" onClick={() => navigate('/specification', { state: file })}>
+                                    <button type="button" className="btn btn--outline" onClick={() => navigate('/builder', { state: file })}>
                                         Изменить спецификацию
                                     </button>
                                     <button type="button" className="btn btn--outline" onClick={() => downloadFile(new Blob([file.content], {

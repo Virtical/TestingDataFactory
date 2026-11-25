@@ -112,7 +112,7 @@ export function HomePage() {
                 setUploadError('Файл пуст. Выберите файл с содержимым спецификации.');
                 return;
             }
-            navigate('/specification', { state: { fileName: file.name, content } });
+            navigate('/builder', { state: { fileName: file.name, content } });
         } catch {
             setUploadError('Не удалось прочитать файл. Попробуйте выбрать его ещё раз.');
         } finally {
@@ -298,7 +298,7 @@ function SpecificationDraft({ yaml }: { yaml: string }) {
             <div className="create-spec__result-header">
                 <h2 id="specification-draft-title">Черновик спецификации</h2>
                 <div className="create-spec__result-actions">
-                    <Link className="btn btn--outline" to="/specification" state={{ fileName: 'specification.yaml', content: yaml }}>
+                    <Link className="btn btn--outline" to="/builder" state={{ fileName: 'specification.yaml', content: yaml }}>
                         Открыть в редакторе
                     </Link>
                     <button type="button" className="btn btn--outline" onClick={() => void copyYaml()}>Скопировать</button>
