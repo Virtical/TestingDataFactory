@@ -224,14 +224,21 @@ export function HomePage() {
                         {uploadError && <p className="create-spec__error" role="alert">{uploadError}</p>}
 
                         <div className="create-spec__cards">
-                            <div className="spec-card">
-                                <div className="spec-card__icon">
+                            <button
+                                type="button"
+                                className="spec-card spec-card--upload"
+                                onClick={() => navigate('/builder')}
+                                aria-label="Собрать в конструкторе"
+                            >
+                                <span className="spec-card__icon">
                                     <Table size={24} />
-                                </div>
-                                <h3 className="spec-card__title">Собрать в конструкторе</h3>
-                                <p className="spec-card__desc">Добавьте таблицы и поля, задайте типы, связи и ограничения.</p>
-                                <button className="spec-card__btn">Начать с пустой схемы</button>
-                            </div>
+                                </span>
+                                <span className="spec-card__title">Собрать в конструкторе</span>
+                                <span className="spec-card__desc">
+                                    Добавьте таблицы и поля, задайте типы, связи и ограничения.
+                                </span>
+                                <span className="spec-card__btn">Начать с пустой схемы</span>
+                            </button>
 
                             <button
                                 type="button"
