@@ -1,15 +1,47 @@
-import { useState } from 'react';
+import { useState, type SubmitEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Table, FileEarmarkCode, Server } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
+import { parseSpecification } from '../api/specifications';
 import './HomePage.css';
 
 export function HomePage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [description, setDescription] = useState('');
     
     const initial = user ? user.firstName[0] : '';
 
+    const handleCreateDraft = (e: SubmitEvent) => {
+        e.preventDefault();
+        if (!description.trim() || isSubmitting) return;
+
+        void submitDraft();
+    }
+
+    const submitDraft = async () => {
+        setError(null);
+        setIsSubmitting(true);
+
+        try {
+            const result = await parseSpecification(description);
+
+            if (result.isSuccess) {
+                navigate('/project/1'); // Когда бэкенд будет возвращать ID проекта, использовать его
+            } else {
+                const firstError = result.diagnostics[0]?.message || 'Не удалось разобрать спецификацию';
+                setError(firstError);
+            }
+        } catch (err) {
+            setError('Сервер недоступен или произошла ошибка. Попробуйте позже.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
     return (
         <div className="layout">
             <Sidebar />
@@ -28,20 +60,28 @@ export function HomePage() {
                             Начните со спецификации — по ней генерируются данные и SQL-скрипты и проверяются готовые данные
                         </p>
 
-                        <div className="create-spec__input-block">
+                        <form onSubmit={handleCreateDraft} className="create-spec__input-block">
                             <label>Опишите данные словами</label>
                             <textarea
                                 placeholder="Например: интернет-магазин — клиенты, товары и заказы; у каждого клиента от 0 до 5 заказов, в заказе 1–4 позиции"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={4}
+                                disabled={isSubmitting}
                             />
+
+                            {error && (
+                                <p className="create-spec__error">
+                                    {error}
+                                </p>
+                            )}
+                            
                             <div className="create-spec__input-actions">
-                                <button className="btn btn--primary create-spec__draft-btn">
-                                    Создать черновик
+                                <button className="btn btn--primary create-spec__draft-btn" disabled={isSubmitting || !description.trim()}>
+                                    {isSubmitting ? 'Анализируем...' : 'Создать черновик'}
                                 </button>
                             </div>
-                        </div>
+                        </form>
 
                         <div className="create-spec__divider">
                             <span>или</span>
