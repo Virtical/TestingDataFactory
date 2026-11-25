@@ -214,6 +214,15 @@
     border-bottom: 2px solid var(--color-border);
 }
 
+.runs-table tbody tr:first-child td {
+    padding-top: 10px;
+}
+
+.runs-table td {
+    padding: 5px 0;
+    vertical-align: middle;
+}
+
 .runs-table__empty-cell {
     padding: 32px 16px 16px;
     text-align: center;
@@ -232,6 +241,26 @@
 
 .link:hover {
     text-decoration: underline;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge--success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+.badge--warning {
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
 }
 
 @media (max-width: 900px) {

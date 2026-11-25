@@ -1,11 +1,53 @@
+import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Server, CodeSlash, ShieldCheck, Check2 } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
+import { startGeneration } from '../api/specifications';
 import './ProjectOverviewPage.css';
+
+type RunRecord = {
+    id: string;
+    date: string;
+    action: string;
+    params: string;
+    version: string;
+    status: 'InProgress' | 'Completed';
+};
 
 export function ProjectOverviewPage() {
     const { user } = useAuth();
+    const { id: projectId } = useParams();
     const initial = user ? user.firstName[0] : 'A';
+
+    const [runs, setRuns] = useState<RunRecord[]>([]);
+
+    const handleActionClick = async (actionType: 'data' | 'sql' | 'validate', title: string, paramsStr: string) => {
+        try {
+            const response = await startGeneration(projectId || 1, actionType, {});
+
+            const newRun: RunRecord = {
+                id: response.runId,
+                date: 'Только что',
+                action: title,
+                params: paramsStr,
+                version: 'v1',
+                status: 'InProgress',
+            };
+
+            setRuns(prev => [newRun, ...prev]);
+
+            // Имитация завершения задачи через 3 секунды
+            setTimeout(() => {
+                setRuns(prev => prev.map(run =>
+                    run.id === response.runId ? { ...run, status: 'Completed' } : run
+                ));
+            }, 3000);
+
+        } catch (error) {
+            alert('Ошибка при запуске генерации');
+        }
+    };
 
     return (
         <div className="layout">
@@ -57,7 +99,7 @@ export function ProjectOverviewPage() {
                         <h3 className="section-title">Что сделать по спецификации</h3>
 
                         <div className="action-cards">
-                            <div className="action-card">
+                            <div className="action-card" onClick={() => handleActionClick('data', 'Данные', 'JSON · обычные данные')}>
                                 <div className="action-card__top">
                                     <div className="action-card__icon"><Server size={24} /></div>
                                     <div className="action-card__text">
@@ -68,7 +110,7 @@ export function ProjectOverviewPage() {
                                 <span className="action-card__formats">JSON · CSV · SQLite</span>
                             </div>
 
-                            <div className="action-card">
+                            <div className="action-card" onClick={() => handleActionClick('sql', 'SQL-скрипт', 'PostgreSQL')}>
                                 <div className="action-card__top">
                                     <div className="action-card__icon"><CodeSlash size={24} /></div>
                                     <div className="action-card__text">
@@ -79,7 +121,7 @@ export function ProjectOverviewPage() {
                                 <span className="action-card__formats">PostgreSQL · MySQL · SQLite</span>
                             </div>
 
-                            <div className="action-card">
+                            <div className="action-card" onClick={() => handleActionClick('validate', 'Валидация', 'orders.csv')}>
                                 <div className="action-card__top">
                                     <div className="action-card__icon"><ShieldCheck size={24} /></div>
                                     <div className="action-card__text">
@@ -105,11 +147,36 @@ export function ProjectOverviewPage() {
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr>
-                                    <td colSpan={6} className="runs-table__empty-cell">
-                                        Запусков пока не было
-                                    </td>
-                                </tr>
+                                {runs.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="runs-table__empty-cell">
+                                            Запусков пока не было
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    runs.map(run => (
+                                        <tr key={run.id}>
+                                            <td>{run.date}</td>
+                                            <td>{run.action}</td>
+                                            <td>{run.params}</td>
+                                            <td>{run.version}</td>
+                                            <td>
+                                                {run.status === 'InProgress' ? (
+                                                    <span className="badge badge--warning">В процессе...</span>
+                                                ) : (
+                                                    <span className="badge badge--success">
+                                                            <Check2 size={12}/> Готово
+                                                        </span>
+                                                )}
+                                            </td>
+                                            <td className="text-right">
+                                                {run.status === 'Completed' && (
+                                                    <a href="#" className="link" onClick={(e) => { e.preventDefault(); alert('Скачивание файла'); }}>Скачать</a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                                 </tbody>
                             </table>
                         </div>

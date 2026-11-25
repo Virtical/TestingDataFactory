@@ -55,6 +55,11 @@
     line-height: 1.5;
 }
 
+.create-spec__error {
+    color: var(--color-error);
+    margin-bottom: 16px;
+}
+
 .create-spec__input-block {
     background: var(--color-surface);
     border: 2px solid var(--color-border);
