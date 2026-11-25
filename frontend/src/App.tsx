@@ -7,6 +7,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProjectOverviewPage } from './pages/ProjectOverviewPage';
+import { BuilderPage } from './pages/BuilderPage';
 
 function App() {
     return (
@@ -18,6 +19,7 @@ function App() {
                     </Route>
                     <Route element={<ProtectedRoute />}>
                         <Route path="/dashboard" element={<HomePage />} />
+                        <Route path="/builder" element={<BuilderPage />} />
                         <Route path="/project/:id" element={<ProjectOverviewPage />} />
                     </Route>
                     <Route element={<GuestRoute />}>

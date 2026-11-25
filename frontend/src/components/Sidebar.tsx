@@ -3,7 +3,7 @@ import { Box, ArrowBarRight, PlusLg, Search } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
 import './Sidebar.css';
 
-export function Sidebar() {
+export function Sidebar({ showEmptyState = true }: { showEmptyState?: boolean }) {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
 
@@ -34,7 +34,7 @@ export function Sidebar() {
             </div>
 
             <div className="sidebar__scroll-area">
-                <p className="sidebar__empty-text">У вас пока нет проектов</p>
+                {showEmptyState && <p className="sidebar__empty-text">У вас пока нет проектов</p>}
             </div>
 
             <div className="sidebar__footer">

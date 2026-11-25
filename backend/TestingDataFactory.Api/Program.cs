@@ -2,14 +2,11 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using TestingDataFactory;
 using TestingDataFactory.Api;
 using TestingDataFactory.Api.Controllers;
 using TestingDataFactory.Api.Errors;
 using TestingDataFactory.Api.Validation;
-using TestingDataFactory.Data;
-using TestingDataFactory.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,11 +33,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 // Правила поля выполняются до первой ошибки: на поле одно сообщение, и правила после NotEmpty не получают null.
 ValidatorOptions.Global.DefaultRuleLevelCascadeMode = CascadeMode.Stop;
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
-
-builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
-builder.Services.AddScoped<UserService>();
+builder.Services.AddTestingDataFactory(builder.Configuration);
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -85,9 +78,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "TestingDataFactory API"));
 
-    // В разработке база создаётся и обновляется до последней миграции при запуске.
-    using var scope = app.Services.CreateScope();
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
 }
 
 app.UseHttpsRedirection();

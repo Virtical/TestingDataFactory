@@ -2,6 +2,7 @@
   <configuration default="false" name="Frontend + Backend" type="CompoundRunConfigurationType">
     <toRun name="Backend" type="LaunchSettings" />
     <toRun name="Frontend" type="js.build_tools.npm" />
+    <toRun name="Worker" type="LaunchSettings" />
     <method v="2" />
   </configuration>
 </component>

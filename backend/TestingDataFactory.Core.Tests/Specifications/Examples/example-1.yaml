@@ -1,0 +1,22 @@
+spec_version: '1.0'
+locale: ru_RU
+ 
+types:
+  city: { enum: { dictionary: russian_cities } }
+ 
+tables:
+  users:
+    fields:
+      id:         { type: uuid, primary: true }
+      full_name:  { generator: person.full_name, pii: true }
+      email:      { generator: internet.email, unique: true, pii: true }
+      age:        { type: integer, min: 18, max: 90, distribution: { normal: { mean: 35, std: 12 } } }
+      city:       { type: city }
+      is_active:  { type: boolean, true_rate: 0.85 }
+      created_at: { type: datetime, min: '2024-01-01', max: '2026-10-01' }
+      phone:      { generator: phone, null_rate: 0.1, pii: true }
+ 
+generation:
+  seed: 42
+  rows: { users: 1000 }
+  output: { csv: {} }

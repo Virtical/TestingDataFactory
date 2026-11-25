@@ -17,5 +17,7 @@ public enum ErrorCode
     [JsonStringEnumMemberName("EMAIL_TAKEN")]
     EmailTaken = 11,
     [JsonStringEnumMemberName("INVALID_CREDENTIALS")]
-    InvalidCredentials = 12
+    InvalidCredentials = 12,
+    [JsonStringEnumMemberName("SPECIFICATION_JOB_NOT_FOUND")]
+    SpecificationJobNotFound = 20
 }
