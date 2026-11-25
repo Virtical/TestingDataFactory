@@ -20,4 +20,13 @@ public sealed record GenerationResult(GenerationOptions? Options, IEnumerable<Ge
     /// <summary>Записывает отдельные CSV для всех таблиц в новую папку.</summary>
     public Task WriteCsvDirectoryAsync(string path, CancellationToken cancellationToken = default) =>
         CsvFileWriter.WriteDirectoryAsync(this, path, cancellationToken);
+
+    public Task WriteCsvAsync(Stream stream, CancellationToken cancellationToken = default) =>
+        CsvFileWriter.WriteStreamAsync(this, stream, cancellationToken);
+
+    public Task WriteCsvZipAsync(Stream stream, CancellationToken cancellationToken = default) =>
+        CsvFileWriter.WriteZipAsync(this, stream, cancellationToken);
+
+    public Task WriteJsonAsync(Stream stream, CancellationToken cancellationToken = default) =>
+        JsonDatasetWriter.WriteAsync(this, stream, cancellationToken);
 }

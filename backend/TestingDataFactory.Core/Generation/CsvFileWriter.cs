@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using TestingDataFactory.Core.Specifications.Model;
 
@@ -6,6 +7,49 @@ namespace TestingDataFactory.Core.Generation;
 
 internal static class CsvFileWriter
 {
+    internal static async Task WriteZipAsync(GenerationResult result, Stream stream, CancellationToken token)
+    {
+        if (!result.IsSuccess || result.TableColumns is null || result.Options!.Output is not CsvOutput csv)
+            throw new InvalidOperationException("Для записи CSV требуется успешный результат генерации с форматом csv.");
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
+        using var rows = result.Rows!.GetEnumerator();
+        token.ThrowIfCancellationRequested();
+        var hasRow = rows.MoveNext();
+        var index = 0;
+        foreach (var (table, columns) in result.TableColumns)
+        {
+            token.ThrowIfCancellationRequested();
+            var escapedName = Uri.EscapeDataString(table);
+            var entry = archive.CreateEntry($"{++index:D4}-{escapedName[..Math.Min(escapedName.Length, 180)]}.csv");
+            await using var entryStream = entry.Open();
+            await using var writer = new StreamWriter(entryStream, new UTF8Encoding(false), leaveOpen: true);
+            await WriteLine(writer, columns, csv.Delimiter, token);
+            while (hasRow && rows.Current.Table == table)
+            {
+                token.ThrowIfCancellationRequested();
+                await WriteLine(writer, columns.Select(column => Format(rows.Current.Values[column])), csv.Delimiter, token);
+                hasRow = rows.MoveNext();
+            }
+            await writer.FlushAsync(token);
+        }
+    }
+
+    internal static async Task WriteStreamAsync(GenerationResult result, Stream stream, CancellationToken token)
+    {
+        if (!result.IsSuccess || result.Columns is null || result.Options!.Output is not CsvOutput csv)
+            throw new InvalidOperationException("Для записи CSV требуется успешный результат генерации с форматом csv.");
+
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 65536, leaveOpen: true);
+        await WriteLine(writer, result.Columns, csv.Delimiter, token);
+        foreach (var row in result.Rows!)
+        {
+            token.ThrowIfCancellationRequested();
+            await WriteLine(writer, result.Columns.Select(column => Format(row.Values[column])), csv.Delimiter, token);
+        }
+        await writer.FlushAsync(token);
+    }
+
     internal static async Task WriteDirectoryAsync(GenerationResult result, string path, CancellationToken token)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -58,7 +102,7 @@ internal static class CsvFileWriter
     internal static async Task WriteAsync(GenerationResult result, string path, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (!result.IsSuccess || result.Columns is null || result.Options!.Output is not CsvOutput csv)
+        if (!result.IsSuccess || result.Columns is null || result.Options!.Output is not CsvOutput)
             throw new InvalidOperationException("Для записи CSV требуется успешный результат генерации с форматом csv.");
         var fullPath = Path.GetFullPath(path);
         if (File.Exists(fullPath) || Directory.Exists(fullPath)) throw new IOException("Итоговый путь уже существует.");
@@ -70,14 +114,7 @@ internal static class CsvFileWriter
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
             {
                 created = true;
-                await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 65536, leaveOpen: false);
-                await WriteLine(writer, result.Columns, csv.Delimiter, cancellationToken);
-                foreach (var row in result.Rows!)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await WriteLine(writer, result.Columns.Select(column => Format(row.Values[column])), csv.Delimiter, cancellationToken);
-                }
-                await writer.FlushAsync(cancellationToken);
+                await WriteStreamAsync(result, stream, cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, fullPath);
@@ -115,7 +152,7 @@ internal static class CsvFileWriter
         _ => throw new InvalidOperationException("Тип значения пока не поддерживается в CSV: " + value.GetType().Name)
     };
 
-    private static string FormatTemporal(TemporalBound value)
+    internal static string FormatTemporal(TemporalBound value)
     {
         var date = value.Date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
         var time = value.Time?.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture) ?? "";

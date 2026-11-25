@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TestingDataFactory\TestingDataFactory.csproj" />
+    <ProjectReference Include="..\TestingDataFactory.Core\TestingDataFactory.Core.csproj" />
   </ItemGroup>
 
 </Project>

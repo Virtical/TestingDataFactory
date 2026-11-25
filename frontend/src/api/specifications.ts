@@ -170,36 +170,3 @@ export function startSpecificationJob(prompt: string, signal?: AbortSignal): Pro
 export function getSpecificationJob(jobId: string, signal?: AbortSignal): Promise<SpecificationJob> {
     return request(`/api/specification-jobs/${encodeURIComponent(jobId)}`, { signal });
 }
-
-export type GenerationRunResponse = {
-    runId: string;
-    status: 'InProgress' | 'Completed' | 'Failed';
-};
-
-// Уточнить URL и формат тела
-export async function startGeneration(
-    _projectId: string | number,
-    _type: 'data' | 'sql' | 'validate',
-    _options: any // Пока any
-): Promise<GenerationRunResponse> {
-    // Имитация задержки сети (чтобы увидели "Анализируем...")
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Имитация успешного ответа от сервера
-    return {
-        runId: Math.random().toString(36).substring(7),
-        status: 'InProgress',
-    };
-
-    /* С бекендом будет это:
-    const res = await fetch(`/api/projects/${projectId}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ type, ...options }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw { code: 'ERROR', message: 'Ошибка генерации' };
-    return data;
-    */
-}

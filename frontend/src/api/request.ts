@@ -21,7 +21,7 @@ type RequestOptions = {
     signal?: AbortSignal;
 };
 
-export async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
+export async function requestResponse(url: string, options: RequestOptions = {}): Promise<Response> {
     const { method = 'GET', body, signal } = options;
     let res: Response;
 
@@ -37,14 +37,15 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
         throw NETWORK_ERROR;
     }
 
-    if (res.status === 204) {
-        return undefined as T;
-    }
-
-    const data = await res.json().catch(() => null);
     if (!res.ok) {
+        const data = await res.json().catch(() => null);
         throw { ...(data?.error ?? UNKNOWN_ERROR), status: res.status } as ApiError;
     }
+    return res;
+}
 
-    return data as T;
+export async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
+    const res = await requestResponse(url, options);
+    if (res.status === 204) return undefined as T;
+    return await res.json().catch(() => null) as T;
 }

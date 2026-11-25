@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Table, FileEarmarkCode, Server } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
@@ -291,6 +291,9 @@ function SpecificationDraft({ yaml }: { yaml: string }) {
             <div className="create-spec__result-header">
                 <h2 id="specification-draft-title">Черновик спецификации</h2>
                 <div className="create-spec__result-actions">
+                    <Link className="btn btn--outline" to="/specification" state={{ fileName: 'specification.yaml', content: yaml }}>
+                        Открыть в редакторе
+                    </Link>
                     <button type="button" className="btn btn--outline" onClick={() => void copyYaml()}>Скопировать</button>
                     <button type="button" className="btn btn--outline" onClick={downloadYaml}>Скачать YAML</button>
                 </div>
