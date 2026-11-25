@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type SubmitEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState, type ChangeEvent, type SubmitEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Table, FileEarmarkCode, Server } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,7 @@ function isPending(job: SpecificationJob) {
 
 export function HomePage() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const jobId = searchParams.get('job') || null;
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,13 +35,16 @@ export function HomePage() {
     const [description, setDescription] = useState('');
     const [trackedJob, setTrackedJob] = useState<TrackedJob | null>(null);
     const submitRequest = useRef<AbortController | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isReadingFile, setIsReadingFile] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
 
     const initial = user ? user.firstName[0] : '';
     const currentJob = trackedJob?.jobId === jobId ? trackedJob : null;
     const job = currentJob?.job;
     const status = job?.status;
     const isGenerating = Boolean(jobId) && !currentJob?.unavailable && (!job || isPending(job));
-    const isBusy = isSubmitting || isGenerating;
+    const isBusy = isSubmitting || isGenerating || isReadingFile;
     const jobError = currentJob?.error ?? (status === 'Failed'
         ? job?.errorMessage || 'Не удалось сгенерировать спецификацию'
         : null);
@@ -85,6 +89,36 @@ export function HomePage() {
             window.clearTimeout(timer);
         };
     }, [jobId]);
+
+    const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file || isBusy) return;
+
+        setUploadError(null);
+        if (!/\.(ya?ml|json)$/i.test(file.name)) {
+            setUploadError('Выберите файл спецификации в формате .yaml, .yml или .json.');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            setUploadError('Файл слишком большой. Максимальный размер — 5 МБ.');
+            return;
+        }
+
+        setIsReadingFile(true);
+        try {
+            const content = (await file.text()).replace(/^\uFEFF/, '');
+            if (!content.trim()) {
+                setUploadError('Файл пуст. Выберите файл с содержимым спецификации.');
+                return;
+            }
+            navigate('/specification', { state: { fileName: file.name, content } });
+        } catch {
+            setUploadError('Не удалось прочитать файл. Попробуйте выбрать его ещё раз.');
+        } finally {
+            setIsReadingFile(false);
+        }
+    };
 
     const handleCreateDraft = async (e: SubmitEvent) => {
         e.preventDefault();
@@ -179,6 +213,16 @@ export function HomePage() {
                             <span>или</span>
                         </div>
 
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".yaml,.yml,.json"
+                            aria-label="Файл спецификации"
+                            hidden
+                            onChange={handleFileChange}
+                        />
+                        {uploadError && <p className="create-spec__error" role="alert">{uploadError}</p>}
+
                         <div className="create-spec__cards">
                             <div className="spec-card">
                                 <div className="spec-card__icon">
@@ -189,14 +233,21 @@ export function HomePage() {
                                 <button className="spec-card__btn">Начать с пустой схемы</button>
                             </div>
 
-                            <div className="spec-card">
-                                <div className="spec-card__icon">
+                            <button
+                                type="button"
+                                className="spec-card spec-card--upload"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isBusy}
+                                aria-label="Загрузить спецификацию"
+                                aria-busy={isReadingFile}
+                            >
+                                <span className="spec-card__icon">
                                     <FileEarmarkCode size={24} />
-                                </div>
-                                <h3 className="spec-card__title">Загрузить спецификацию</h3>
-                                <p className="spec-card__desc">Готовый файл спецификации - откроется в конструкторе для правки.</p>
-                                <div className="spec-card__formats">.yaml, .json</div>
-                            </div>
+                                </span>
+                                <span className="spec-card__title">{isReadingFile ? 'Открываем файл…' : 'Загрузить спецификацию'}</span>
+                                <span className="spec-card__desc">Готовый файл спецификации - откроется в конструкторе для правки.</span>
+                                <span className="spec-card__formats">.yaml, .json</span>
+                            </button>
 
                             <div className="spec-card">
                                 <div className="spec-card__icon">
