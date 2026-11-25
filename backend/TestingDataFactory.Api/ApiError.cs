@@ -14,7 +14,8 @@ public record ErrorResponse(ErrorBody Error)
 }
 
 /// <param name="Code">
-/// VALIDATION_ERROR, INVALID_CREDENTIALS, EMAIL_TAKEN, UNAUTHORIZED, FORBIDDEN, TOO_MANY_REQUESTS или INTERNAL_ERROR.
+/// VALIDATION_ERROR, INVALID_CREDENTIALS, EMAIL_TAKEN, UNAUTHORIZED, FORBIDDEN, TOO_MANY_REQUESTS,
+/// SPECIFICATION_JOB_NOT_FOUND или INTERNAL_ERROR.
 /// </param>
 /// <param name="Message">Общее сообщение, показывается над кнопкой формы.</param>
 /// <param name="Fields">Ошибки по полям (ключи — имена полей запроса в camelCase), есть только у VALIDATION_ERROR.</param>

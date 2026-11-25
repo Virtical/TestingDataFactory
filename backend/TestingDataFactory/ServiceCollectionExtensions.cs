@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<UserService>();
+        services.AddScoped<SpecificationJobService>();
         services.AddScoped<SpecificationJobEventHandler>();
         
         // Инициализация выполняется до запуска hosted services шины и доставки outbox.

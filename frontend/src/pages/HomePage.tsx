@@ -1,49 +1,124 @@
-import { useState, type SubmitEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Table, FileEarmarkCode, Server } from 'react-bootstrap-icons';
 import { useAuth } from '../context/AuthContext';
-import { parseSpecification } from '../api/specifications';
+import { getSpecificationJob, startSpecificationJob, type SpecificationJob } from '../api/specifications';
+import { type ApiError } from '../api/request';
 import './HomePage.css';
+
+const POLL_INTERVAL_MS = 2000;
+
+type TrackedJob = {
+    jobId: string;
+    job?: SpecificationJob;
+    error?: string;
+    unavailable?: boolean;
+};
+
+const pendingLabels = {
+    Queued: 'Задача в очереди',
+    Running: 'Генерируем спецификацию…',
+};
+
+function isPending(job: SpecificationJob) {
+    return job.status === 'Queued' || job.status === 'Running';
+}
 
 export function HomePage() {
     const { user } = useAuth();
-    const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const jobId = searchParams.get('job') || null;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [description, setDescription] = useState('');
-    
+    const [trackedJob, setTrackedJob] = useState<TrackedJob | null>(null);
+    const submitRequest = useRef<AbortController | null>(null);
+
     const initial = user ? user.firstName[0] : '';
+    const currentJob = trackedJob?.jobId === jobId ? trackedJob : null;
+    const job = currentJob?.job;
+    const status = job?.status;
+    const isGenerating = Boolean(jobId) && !currentJob?.unavailable && (!job || isPending(job));
+    const isBusy = isSubmitting || isGenerating;
+    const jobError = currentJob?.error ?? (status === 'Failed'
+        ? job?.errorMessage || 'Не удалось сгенерировать спецификацию'
+        : null);
 
-    const handleCreateDraft = (e: SubmitEvent) => {
+    useEffect(() => () => submitRequest.current?.abort(), []);
+
+    useEffect(() => {
+        if (!jobId) return;
+
+        const controller = new AbortController();
+        let timer: number | undefined;
+
+        const refresh = async () => {
+            try {
+                const updatedJob = await getSpecificationJob(jobId, controller.signal);
+                if (controller.signal.aborted) return;
+
+                setTrackedJob({ jobId, job: updatedJob });
+                if (!isPending(updatedJob)) return;
+            } catch (err) {
+                if (controller.signal.aborted) return;
+
+                const { status, message } = err as ApiError;
+                const unavailable = status === 401 || status === 403 || status === 404;
+                setTrackedJob(previous => ({
+                    jobId,
+                    job: previous?.jobId === jobId ? previous.job : undefined,
+                    error: unavailable
+                        ? (status === 404 ? 'Черновик не найден' : message)
+                        : 'Не удалось обновить статус. Повторяем запрос…',
+                    unavailable,
+                }));
+                if (unavailable) return;
+            }
+
+            timer = window.setTimeout(() => void refresh(), POLL_INTERVAL_MS);
+        };
+
+        void refresh();
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [jobId]);
+
+    const handleCreateDraft = async (e: SubmitEvent) => {
         e.preventDefault();
-        if (!description.trim() || isSubmitting) return;
+        const prompt = description.trim();
+        if (!prompt || isBusy || submitRequest.current) return;
 
-        void submitDraft();
-    }
-
-    const submitDraft = async () => {
+        const controller = new AbortController();
+        submitRequest.current = controller;
         setError(null);
         setIsSubmitting(true);
 
         try {
-            const result = await parseSpecification(description);
+            const createdJob = await startSpecificationJob(prompt, controller.signal);
+            if (controller.signal.aborted) return;
 
-            if (result.isSuccess) {
-                navigate('/project/1'); // Когда бэкенд будет возвращать ID проекта, использовать его
-            } else {
-                const firstError = result.diagnostics[0]?.message || 'Не удалось разобрать спецификацию';
-                setError(firstError);
-            }
+            setTrackedJob({ jobId: createdJob.jobId, job: createdJob });
+            setSearchParams(params => {
+                const next = new URLSearchParams(params);
+                next.set('job', createdJob.jobId);
+                return next;
+            }, { replace: true });
         } catch (err) {
-            setError('Сервер недоступен или произошла ошибка. Попробуйте позже.');
+            if (controller.signal.aborted) return;
+
+            const apiError = err as ApiError;
+            setError(apiError.fields?.prompt ?? apiError.message);
         } finally {
-            setIsSubmitting(false);
+            submitRequest.current = null;
+            if (!controller.signal.aborted) setIsSubmitting(false);
         }
     };
-    
+
     return (
-        <div className="layout">
+        <div className="layout layout--draft">
             <Sidebar />
             <div className="layout__main">
                 <header className="topbar">
@@ -61,27 +136,44 @@ export function HomePage() {
                         </p>
 
                         <form onSubmit={handleCreateDraft} className="create-spec__input-block">
-                            <label>Опишите данные словами</label>
+                            <label htmlFor="specification-prompt">Опишите данные словами</label>
                             <textarea
+                                id="specification-prompt"
                                 placeholder="Например: интернет-магазин — клиенты, товары и заказы; у каждого клиента от 0 до 5 заказов, в заказе 1–4 позиции"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 rows={4}
-                                disabled={isSubmitting}
+                                disabled={isBusy}
                             />
 
                             {error && (
-                                <p className="create-spec__error">
+                                <p className="create-spec__error" role="alert">
                                     {error}
                                 </p>
                             )}
                             
                             <div className="create-spec__input-actions">
-                                <button className="btn btn--primary create-spec__draft-btn" disabled={isSubmitting || !description.trim()}>
-                                    {isSubmitting ? 'Анализируем...' : 'Создать черновик'}
+                                <button type="submit" className="btn btn--primary create-spec__draft-btn" disabled={isBusy || !description.trim()}>
+                                    {isSubmitting ? 'Запускаем…' : 'Создать черновик'}
                                 </button>
                             </div>
                         </form>
+
+                        <div role="status">
+                            {isGenerating && (
+                                <p className="create-spec__status">
+                                    <span className="create-spec__spinner" aria-hidden="true" />
+                                    {status === 'Queued' || status === 'Running' ? pendingLabels[status] : 'Проверяем статус…'}
+                                </p>
+                            )}
+                            {status === 'Succeeded' && (
+                                <span className="create-spec__announcement">Черновик спецификации готов</span>
+                            )}
+                        </div>
+                        {jobError && <p className="create-spec__error" role="alert">{jobError}</p>}
+                        {job?.status === 'Succeeded' && job.specificationYaml && (
+                            <SpecificationDraft key={job.jobId} yaml={job.specificationYaml} />
+                        )}
 
                         <div className="create-spec__divider">
                             <span>или</span>
@@ -119,5 +211,43 @@ export function HomePage() {
                 </main>
             </div>
         </div>
+    );
+}
+
+function SpecificationDraft({ yaml }: { yaml: string }) {
+    const [copyFeedback, setCopyFeedback] = useState('');
+
+    const copyYaml = async () => {
+        try {
+            await navigator.clipboard.writeText(yaml);
+            setCopyFeedback('YAML скопирован');
+        } catch {
+            setCopyFeedback('Не удалось скопировать YAML');
+        }
+    };
+
+    const downloadYaml = () => {
+        const url = URL.createObjectURL(new Blob([yaml], { type: 'application/yaml' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'specification.yaml';
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    return (
+        <section className="create-spec__result" aria-labelledby="specification-draft-title">
+            <div className="create-spec__result-header">
+                <h2 id="specification-draft-title">Черновик спецификации</h2>
+                <div className="create-spec__result-actions">
+                    <button type="button" className="btn btn--outline" onClick={() => void copyYaml()}>Скопировать</button>
+                    <button type="button" className="btn btn--outline" onClick={downloadYaml}>Скачать YAML</button>
+                </div>
+            </div>
+            <pre className="create-spec__yaml" tabIndex={0} aria-label="YAML спецификации"><code>{yaml}</code></pre>
+            <div role="status">
+                {copyFeedback && <p className="create-spec__copy-feedback">{copyFeedback}</p>}
+            </div>
+        </section>
     );
 }

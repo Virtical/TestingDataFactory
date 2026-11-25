@@ -1,0 +1,40 @@
+name: tdf-local
+
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: testing_data_factory
+      POSTGRES_USER: dataforge
+      POSTGRES_PASSWORD: dataforge-local
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4.4.0-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_VHOST: testing-data-factory
+      RABBITMQ_DEFAULT_USER: dataforge
+      RABBITMQ_DEFAULT_PASS: dataforge-local
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

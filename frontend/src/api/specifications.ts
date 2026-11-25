@@ -1,3 +1,5 @@
+import { request } from './request';
+
 export type CelExpression = {
     source: string;
     dependencies: string[];
@@ -153,24 +155,20 @@ export type SpecificationParseResult = {
     isSuccess: boolean;
 };
 
-export async function parseSpecification(text: string): Promise<SpecificationParseResult> {
-    const res = await fetch('/api/specifications/parse', { //Уточнить URL
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ text }), //Уточнить, как именно бэкенд ждет текст (поле text, description или raw string)
-    });
+export type SpecificationJob = {
+    jobId: string;
+    status: 'Queued' | 'Running' | 'Succeeded' | 'Failed';
+    specificationYaml: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+};
 
-    const data = await res.json().catch(() => null);
+export function startSpecificationJob(prompt: string, signal?: AbortSignal): Promise<SpecificationJob> {
+    return request('/api/specification-jobs', { method: 'POST', body: { prompt }, signal });
+}
 
-    if (!res.ok) {
-        throw {
-            code: 'NETWORK_ERROR',
-            message: 'Не удалось распознать спецификацию',
-        };
-    }
-
-    return data as SpecificationParseResult;
+export function getSpecificationJob(jobId: string, signal?: AbortSignal): Promise<SpecificationJob> {
+    return request(`/api/specification-jobs/${encodeURIComponent(jobId)}`, { signal });
 }
 
 export type GenerationRunResponse = {
